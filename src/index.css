@@ -1,0 +1,158 @@
+@import "tailwindcss";
+
+/* fonte principal do app: Instrument Sans (auto-hospedada via @fontsource) */
+@theme {
+  --font-sans: "Instrument Sans Variable", system-ui, sans-serif;
+}
+
+/*
+  Base global do Astrodny.
+  A UI de verdade voce constroi com classes do Tailwind nos componentes.
+  Aqui fica so o minimo: tema escuro e reset de altura pra ocupar a tela toda.
+*/
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* Trava a rolagem da página inteira (iOS): o app rola SÓ por dentro (áreas internas).
+   Junto com --app-height, impede o "pulo" de tudo pra cima quando o teclado abre. */
+html,
+body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  margin: 0;
+  background: #0a0d1f;
+  color: #ffffff;
+  font-family: "Instrument Sans Variable", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Tailwind v4 nao poe cursor:pointer em botoes -> todo botao vira clicavel com mouse */
+button:not(:disabled) {
+  cursor: pointer;
+}
+
+/* Mensagem entrando: sobe de baixo + fade (usado no chat) */
+@keyframes subir {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animar-subida {
+  animation: subir 0.3s ease-out both;
+}
+
+/* Esconde a barra de rolagem SEM tirar a rolagem (continua deslizando) */
+.sem-scrollbar {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* Edge/IE antigos */
+}
+.sem-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Edge novos */
+}
+
+/* Barra de rolagem fina e translúcida (discreta/profissional) — pra listas internas
+   como a faixa de PDFs. scrollbar-gutter: stable reserva o espaço SEMPRE, então o
+   card não encolhe nem é empurrado quando a barra aparece/some. */
+.scrollbar-fino {
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-gutter: stable;
+}
+.scrollbar-fino::-webkit-scrollbar {
+  width: 4px;
+}
+.scrollbar-fino::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-fino::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+}
+.scrollbar-fino::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.32);
+}
+
+/* Cursor "digitando" da IA: pisca enquanto ela escreve */
+@keyframes piscar {
+  50% {
+    opacity: 0;
+  }
+}
+.cursor-piscando {
+  animation: piscar 1s step-end infinite;
+}
+
+/*
+  Fundo AURORA: manchas de azul (tons diferentes) que ORBITAM e se sobrepõem,
+  misturando as cores em tempo real.
+  - Sem "quadrado": cada mancha é gigante e muito desfocada (blur) => sem borda.
+  - Sem "tranco": em vez de ir-e-voltar, cada mancha GIRA em torno de um ponto
+    deslocado (transform-origin), traçando um círculo contínuo (rotate 0->360).
+  - mix-blend screen: onde as manchas se cruzam, a cor soma e clareia (aurora).
+*/
+.fundo-aurora {
+  background-color: #04061a; /* base escura pra o "screen" brilhar por cima */
+  overflow: hidden;
+}
+.blob {
+  position: absolute;
+  width: 65vmax;
+  height: 65vmax;
+  border-radius: 50%;
+  filter: blur(70px);
+  mix-blend-mode: screen;
+  will-change: transform;
+}
+.blob-1 {
+  background: radial-gradient(circle, #2a4bff 0%, transparent 70%);
+  top: -10%;
+  left: -10%;
+  transform-origin: 80% 80%;
+  animation: orbitar 22s linear infinite;
+}
+.blob-2 {
+  background: radial-gradient(circle, #0b1f8f 0%, transparent 70%);
+  bottom: -15%;
+  right: -10%;
+  transform-origin: 20% 20%;
+  animation: orbitar 30s linear infinite reverse; /* direção oposta */
+}
+.blob-3 {
+  /* o toque de ROXO: azul-violeta. Só este blob puxa pro roxo — os outros dois
+     seguem azuis, então o azul continua sendo a cor principal da aurora. */
+  background: radial-gradient(circle, #8a5cff 0%, transparent 70%);
+  top: 20%;
+  left: 30%;
+  transform-origin: 50% 130%;
+  animation: orbitar 26s linear infinite;
+}
+@keyframes orbitar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* respeita quem pediu menos animação no sistema */
+@media (prefers-reduced-motion: reduce) {
+  .blob {
+    animation: none;
+  }
+}
+
