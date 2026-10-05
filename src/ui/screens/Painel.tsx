@@ -204,7 +204,7 @@ function Painel() {
           }`}
         />
 
-        <main className="relative z-10 flex min-h-dvh flex-col items-center justify-center gap-6 px-6 pt-24 pb-10 text-white lg:px-16">
+        <main className="relative z-10 flex min-h-dvh -translate-y-8 flex-col items-center justify-center gap-6 px-6 pt-24 pb-10 text-white lg:px-16">
           {/* título + campo de chat */}
           <div className="flex w-full max-w-xl flex-col">
             {/* marca do Astrodny — só a logo, acima de tudo */}
