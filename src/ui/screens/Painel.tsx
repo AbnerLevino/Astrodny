@@ -204,7 +204,7 @@ function Painel() {
           }`}
         />
 
-        <main className="relative z-10 flex min-h-dvh -translate-y-8 flex-col items-center justify-center gap-6 px-6 pt-24 pb-10 text-white lg:px-16">
+        <main className="relative z-10 flex min-h-dvh -translate-y-8 flex-col items-center justify-center gap-8 px-6 pt-24 pb-10 text-white lg:px-16">
           {/* título + campo de chat */}
           <div className="flex w-full max-w-xl flex-col">
             {/* marca do Astrodny — só a logo, acima de tudo */}
@@ -252,7 +252,7 @@ function Painel() {
           </div>
 
           {/* os atalhos — abaixo do campo de chat, com subtítulo, lado a lado em linha */}
-          <div className="flex w-full max-w-xl flex-col gap-3">
+          <div className="flex w-full max-w-xl -translate-y-2 flex-col gap-3">
             <p className="text-sm font-semibold text-white/50">Comece por aqui</p>
             <div className="flex gap-3">
               {ATALHOS.map((a) => {
