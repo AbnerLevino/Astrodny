@@ -244,7 +244,7 @@ function Painel() {
                     enviar()
                   }
                 }}
-                placeholder="Quer fazer um trabalho rápido em ABNT?"
+                placeholder="Pergunte qualquer coisa..."
                 className="flex-1 bg-transparent font-sans text-[16px] leading-6 text-white placeholder:text-white/40 outline-none py-1.5"
               />
               <button
