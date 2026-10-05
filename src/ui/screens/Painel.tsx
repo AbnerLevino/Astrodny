@@ -251,26 +251,28 @@ function Painel() {
             </div>
           </div>
 
-          {/* os atalhos — abaixo do campo de chat, com subtítulo */}
+          {/* os atalhos — abaixo do campo de chat, com subtítulo, lado a lado em linha */}
           <div className="flex w-full max-w-xl flex-col gap-3">
             <p className="text-sm font-semibold uppercase tracking-wide text-white/50">O que você precisa?</p>
-            {ATALHOS.map((a) => {
-              const sugestao = insights?.sugestoes[a.chave]
-              return (
-                <button
-                  key={a.chave}
-                  type="button"
-                  onClick={() => clicarAtalho(a.chave)}
-                  className="flex items-start gap-3 rounded-xl border border-white/50 bg-white/15 px-4 py-3.5 text-left text-white backdrop-blur-md transition-transform hover:scale-[1.01]"
-                >
-                  <span className="mt-0.5 shrink-0 text-white [&>svg]:h-5 [&>svg]:w-5">{a.icone}</span>
-                  <span>
-                    <span className="block text-[15px] font-semibold">{a.nome}</span>
-                    <span className="block text-[13px] leading-snug text-white/65">{sugestao ?? a.explicacao}</span>
-                  </span>
-                </button>
-              )
-            })}
+            <div className="flex gap-3">
+              {ATALHOS.map((a) => {
+                const sugestao = insights?.sugestoes[a.chave]
+                return (
+                  <button
+                    key={a.chave}
+                    type="button"
+                    onClick={() => clicarAtalho(a.chave)}
+                    className="flex flex-1 flex-col items-start gap-2 rounded-xl border border-white/50 bg-white/15 px-3 py-3.5 text-left text-white backdrop-blur-md transition-transform hover:scale-[1.01]"
+                  >
+                    <span className="shrink-0 text-white [&>svg]:h-5 [&>svg]:w-5">{a.icone}</span>
+                    <span>
+                      <span className="block text-[14px] font-semibold">{a.nome}</span>
+                      <span className="block text-[12px] leading-snug text-white/65">{sugestao ?? a.explicacao}</span>
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
           </div>
         </main>
 
