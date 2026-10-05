@@ -16,7 +16,8 @@
 */
 import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import Sidebar from './Sidebar'
+import Sidebar, { ModalPerfil, ModalDescubraAstro } from './Sidebar'
+import PerfilModal from './PerfilModal'
 import { useChats } from '../chats'
 import { useAuth } from '../auth'
 import { useStudies } from '../studies'
@@ -105,7 +106,7 @@ function saudacao(): string {
 
 function Painel() {
   const navigate = useNavigate()
-  const { usuario, perfil } = useAuth()
+  const { usuario, perfil, onboardingPendente, salvarPerfil, entrar, sair } = useAuth()
   const { estudos } = useStudies()
   const { chats, criarChat } = useChats()
   const [menuAberto, setMenuAberto] = useState(false)
@@ -114,6 +115,13 @@ function Painel() {
   const [emBreve, setEmBreve] = useState<'trabalhos' | 'provas' | null>(null)
   const [insights, setInsights] = useState<InsightsPainel | null>(null)
   const [carregandoInsights, setCarregandoInsights] = useState(false)
+  // cartão de perfil: foto (logado) abre o modal da conta; sem login, mostra
+  // o chamariz "Descubra o Astro!" — mesmos modais que a Sidebar usa.
+  const [modalAberto, setModalAberto] = useState(false)
+  const [perfilModalAberto, setPerfilModalAberto] = useState(false)
+  const [descubraAberto, setDescubraAberto] = useState(false)
+  // AMOSTRA: mesmo hack da Sidebar, fixo em 'free' até existir plano de verdade.
+  const plano: 'free' | 'pro' = 'free'
 
   // Busca/gera os insights UMA VEZ por visita ao Painel (ao montar). Visitante
   // (sem usuario) nunca chama a IA — fica sempre no texto genérico dos atalhos.
@@ -199,6 +207,20 @@ function Painel() {
           <span className="blob blob-2" />
           <span className="blob blob-3" />
         </div>
+        {/* cartão de perfil — só a foto, sem fundo/cartão preto. Logado: abre o
+            modal da conta. Sem login: não aparece aqui (vira o CTA "Descubra
+            o Astro!" lá embaixo, depois do atalho de Provas). */}
+        {usuario && (
+          <button
+            type="button"
+            onClick={() => setModalAberto(true)}
+            aria-label="Abrir conta"
+            className="absolute right-5 top-[max(1rem,env(safe-area-inset-top))] z-20 shrink-0"
+          >
+            <img src="/perfil.png" alt="" className="h-11 w-11 rounded-full object-cover border-2 border-white/80" />
+          </button>
+        )}
+
         <div
           className={`absolute inset-0 -z-10 bg-[#2e2f36] transition-opacity duration-300 ${
             menuAberto ? 'opacity-100' : 'opacity-0'
@@ -280,6 +302,22 @@ function Painel() {
                 )
               })}
             </div>
+
+            {/* visitante (sem login): chamariz pro login, logo depois do
+                atalho de Provas — como mais uma coisa a descobrir ali. */}
+            {!usuario && (
+              <button
+                type="button"
+                onClick={() => setDescubraAberto(true)}
+                className="aurora-btn mt-1 inline-flex w-fit items-center gap-1.5 self-center rounded-full bg-white/20 px-4 py-2 text-sm font-medium text-white/90 [&_svg]:h-4 [&_svg]:w-4"
+              >
+                <span className="aurora-brilho" aria-hidden="true" />
+                <span className="relative z-10 inline-flex items-center gap-1.5">
+                  <IconeEstrelasAtalho />
+                  Descubra o Astro!
+                </span>
+              </button>
+            )}
           </div>
         </main>
 
@@ -293,6 +331,38 @@ function Painel() {
           aoFechar={() => setEmBreve(null)}
         />
       )}
+
+      {/* modal da conta — abre ao tocar na foto, igual à Sidebar */}
+      {modalAberto && (
+        <ModalPerfil
+          plano={plano}
+          usuario={usuario}
+          aoEntrar={entrar}
+          aoSair={sair}
+          aoFechar={() => setModalAberto(false)}
+          irParaConfig={() => {
+            setModalAberto(false)
+            navigate('/config')
+          }}
+          aoAbrirPerfil={() => {
+            setModalAberto(false)
+            setPerfilModalAberto(true)
+          }}
+        />
+      )}
+
+      {/* formulário grande de perfil (edição manual a partir do modal da conta) */}
+      {perfilModalAberto && perfil && (
+        <PerfilModal
+          perfil={perfil}
+          onboarding={onboardingPendente}
+          aoSalvar={salvarPerfil}
+          aoFechar={() => setPerfilModalAberto(false)}
+        />
+      )}
+
+      {/* modal cheio "Descubra o Astro!" — chamariz de login pra visitante */}
+      {descubraAberto && <ModalDescubraAstro aoEntrar={entrar} aoFechar={() => setDescubraAberto(false)} />}
     </div>
   )
 }
@@ -340,6 +410,16 @@ function IconeProvasAtalho() {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="13" r="8" />
       <path d="M12 9v4l2.5 2.5M9 2h6" />
+    </svg>
+  )
+}
+
+// Estrelinhas do CTA "Descubra o Astro!" (mesmo desenho do da Sidebar)
+function IconeEstrelasAtalho() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <path d="M11 2.5l1.7 4 4 1.7-4 1.7L11 13.9l-1.7-4L5.3 8.2l4-1.7z" />
+      <path d="M18.5 13l.85 2 2 .85-2 .85-.85 2-.85-2-2-.85 2-.85z" />
     </svg>
   )
 }

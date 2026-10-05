@@ -589,7 +589,7 @@ function IconeSliders() {
 
 // Abre ao tocar no cartão de perfil. No mobile é um bottom sheet (sobe de baixo);
 // no desktop, um cartão centralizado. Opções com ícones de tema orbital.
-function ModalPerfil({
+export function ModalPerfil({
   plano,
   usuario,
   aoEntrar,
@@ -678,7 +678,7 @@ function ModalPerfil({
    quanto no desktop (sem bottom-sheet, sem cartão centralizado) — diferente
    do ModalPerfil, porque aqui é uma explicação, não uma lista de opções.
    Design provisório: ainda vamos refinar o visual. */
-function ModalDescubraAstro({
+export function ModalDescubraAstro({
   aoEntrar,
   aoFechar,
 }: {
