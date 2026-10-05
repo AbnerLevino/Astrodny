@@ -23,15 +23,20 @@ import PerfilModal from './PerfilModal'
 function Sidebar({
   aoSelecionar,
   apenasDesktop = false,
+  escondidoNoDesktop = false,
   aoAuroraHover,
 }: {
   aoSelecionar: () => void
   apenasDesktop?: boolean
+  // true no Painel: a Sidebar vira SÓ o drawer do mobile — no desktop (lg+)
+  // não aparece como coluna (o Painel não tem Sidebar fixa; ela volta nas
+  // áreas de trabalho, como Chat e Estudar).
+  escondidoNoDesktop?: boolean
   // dispara a aurora de fundo da página inteira enquanto o mouse está sobre o CTA
   // "Descubra o Astro!" (Home escuta e revela o fundo-aurora atrás do conteúdo)
   aoAuroraHover?: (ativo: boolean) => void
 }) {
-  const { chats, chatAtivoId, setChatAtivo, renomearChat, alternarFixar, excluirChat } = useChats()
+  const { chats, chatAtivoId, renomearChat, alternarFixar, excluirChat } = useChats()
   const { estudos } = useStudies()
   const { usuario, perfil, onboardingPendente, salvarPerfil, entrar, sair } = useAuth()
   const navigate = useNavigate()
@@ -69,9 +74,11 @@ function Sidebar({
   // Depois virá do contexto de usuário; troque pra 'pro' pra ver o outro estado.
   const plano: 'free' | 'pro' = 'free'
 
-  // abre um chat do histórico (ou volta pra saudação) e fecha o menu
+  // abre um chat do histórico (ou um chat em branco) e fecha o menu. Navega
+  // em vez de só trocar o estado — a URL (/chat ou /chat/:id) é quem manda;
+  // quem está na tela (Conversa) sincroniza o chat ativo a partir dela.
   function abrir(id: string | null) {
-    setChatAtivo(id)
+    navigate(id ? `/chat/${id}` : '/chat')
     aoSelecionar()
   }
 
@@ -83,7 +90,11 @@ function Sidebar({
 
   return (
     <aside
-      className={`${apenasDesktop ? 'hidden lg:flex' : 'absolute inset-y-0 left-0 w-[78%] flex'} flex-col bg-black text-white lg:relative lg:inset-auto lg:w-[264px] lg:shrink-0 lg:border-r lg:border-white/10`}
+      className={`${apenasDesktop ? 'hidden lg:flex' : 'absolute inset-y-0 left-0 w-[78%] flex'} flex-col bg-black text-white ${
+        escondidoNoDesktop
+          ? 'lg:hidden'
+          : 'lg:relative lg:inset-auto lg:flex lg:w-[264px] lg:shrink-0 lg:border-r lg:border-white/10'
+      }`}
     >
       {/* itens do menu (sem logo: as opções sobem pro topo, respeitando o notch) */}
       <nav className="flex flex-col gap-1 p-4 pt-[max(1.5rem,env(safe-area-inset-top))]">
