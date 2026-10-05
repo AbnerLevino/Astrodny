@@ -12,10 +12,38 @@
   só reaparece ao entrar numa área de trabalho (Chat/Estudar). No MOBILE
   continua sendo o drawer de sempre (avatar no topo abre).
 */
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import { useChats } from '../chats'
+import { useAuth } from '../auth'
+import { useStudies } from '../studies'
+import { gerarInsightsPainel } from '../../application/homeInsights'
+import { precisaAtualizar } from '../../application/homeInsightsCache'
+import { amostrarMensagensDeAbertura } from '../../application/amostraChats'
+import { localStorageHomeInsightsRepository } from '../../infrastructure/storage/localStorageHomeInsightsRepository'
+import type { InsightsPainel } from '../../domain/painel'
+import { retryProvider } from '../../infrastructure/ai/retryProvider'
+import { proxyProvider } from '../../infrastructure/ai/proxyProvider'
+import { fallbackProvider } from '../../infrastructure/ai/fallbackProvider'
+import { ollamaProvider } from '../../infrastructure/ai/ollamaProvider'
+import { groqProvider, groqConfigurado } from '../../infrastructure/ai/groqProvider'
+import { geminiProvider, geminiConfigurado } from '../../infrastructure/ai/geminiProvider'
+import { cloudflareProvider, cloudflareConfigurado } from '../../infrastructure/ai/cloudflareProvider'
+
+// Mesma cadeia do chat (ver ui/chats.tsx): em PROD tudo pelo proxy (chaves
+// escondidas no servidor); em DEV, Cloudflare/Gemini/Groq de reserva, Ollama
+// local por último. retryProvider dá 1 retentativa silenciosa num 429.
+const ia = retryProvider(
+  import.meta.env.PROD
+    ? proxyProvider
+    : fallbackProvider([
+        ...(cloudflareConfigurado ? [cloudflareProvider] : []),
+        ...(geminiConfigurado ? [geminiProvider] : []),
+        ...(groqConfigurado ? [groqProvider] : []),
+        ollamaProvider,
+      ]),
+)
 
 type ChaveAtalho = 'novoChat' | 'estudar' | 'trabalhos' | 'provas'
 
@@ -81,10 +109,50 @@ function saudacao(): string {
 
 function Painel() {
   const navigate = useNavigate()
-  const { criarChat } = useChats()
+  const { usuario, perfil } = useAuth()
+  const { estudos } = useStudies()
+  const { chats, criarChat } = useChats()
   const [menuAberto, setMenuAberto] = useState(false)
   const [texto, setTexto] = useState('')
   const [emBreve, setEmBreve] = useState<'trabalhos' | 'provas' | null>(null)
+  const [insights, setInsights] = useState<InsightsPainel | null>(null)
+  const [carregandoInsights, setCarregandoInsights] = useState(false)
+
+  // Busca/gera os insights UMA VEZ por visita ao Painel (ao montar). Visitante
+  // (sem usuario) nunca chama a IA — fica sempre no texto genérico dos atalhos.
+  useEffect(() => {
+    if (!usuario) return
+
+    const cache = localStorageHomeInsightsRepository.carregar()
+    if (!precisaAtualizar(cache, estudos, Date.now())) {
+      setInsights(cache!.insights)
+      return
+    }
+
+    let cancelado = false
+    setCarregandoInsights(true)
+    const amostra = amostrarMensagensDeAbertura(chats, Date.now())
+    gerarInsightsPainel(perfil, estudos, amostra, ia)
+      .then((novosInsights) => {
+        if (cancelado) return
+        localStorageHomeInsightsRepository.salvar({ geradoEm: new Date().toISOString(), insights: novosInsights })
+        setInsights(novosInsights)
+      })
+      .catch((e) => {
+        // cai pro texto genérico (insights continua null) — nunca trava a tela
+        console.warn('Painel: não consegui gerar os insights agora, caindo pro texto genérico', e)
+      })
+      .finally(() => {
+        if (!cancelado) setCarregandoInsights(false)
+      })
+
+    return () => {
+      cancelado = true
+    }
+    // perfil/estudos/chats são lidos só na montagem, de propósito — não quero
+    // re-chamar a IA a cada mensagem nova enquanto a pessoa está no Painel.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usuario?.id])
 
   function enviar() {
     const limpo = texto.trim()
@@ -132,6 +200,12 @@ function Painel() {
           <div className="flex flex-col lg:flex-1 lg:max-w-xl">
             <p className="text-xl text-white/80">{saudacao()}, Universitário!</p>
             <h1 className="mt-1 text-[28px] font-bold leading-tight lg:text-4xl">O que temos para fazer hoje?</h1>
+            {carregandoInsights && (
+              <span className="mt-3 inline-flex items-center gap-2 text-sm text-white/50">
+                <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white/70" />
+                Personalizando sugestões…
+              </span>
+            )}
 
             <div className="mt-6 flex items-center gap-2 rounded-[26px] border border-white/50 bg-white/5 pl-4 pr-2 py-1.5 backdrop-blur-md">
               <input
@@ -163,20 +237,23 @@ function Painel() {
 
           {/* os 4 atalhos */}
           <div className="flex flex-col gap-3 lg:w-[22rem] lg:shrink-0">
-            {ATALHOS.map((a) => (
-              <button
-                key={a.chave}
-                type="button"
-                onClick={() => clicarAtalho(a.chave)}
-                className="flex items-start gap-3 rounded-xl border border-black/15 bg-white px-4 py-3.5 text-left text-black shadow-sm transition-transform hover:scale-[1.01]"
-              >
-                <span className="mt-0.5 shrink-0 text-[#0a1560] [&>svg]:h-5 [&>svg]:w-5">{a.icone}</span>
-                <span>
-                  <span className="block text-[15px] font-semibold">{a.nome}</span>
-                  <span className="block text-[13px] leading-snug text-black/60">{a.explicacao}</span>
-                </span>
-              </button>
-            ))}
+            {ATALHOS.map((a) => {
+              const sugestao = insights?.sugestoes[a.chave]
+              return (
+                <button
+                  key={a.chave}
+                  type="button"
+                  onClick={() => clicarAtalho(a.chave)}
+                  className="flex items-start gap-3 rounded-xl border border-black/15 bg-white px-4 py-3.5 text-left text-black shadow-sm transition-transform hover:scale-[1.01]"
+                >
+                  <span className="mt-0.5 shrink-0 text-[#0a1560] [&>svg]:h-5 [&>svg]:w-5">{a.icone}</span>
+                  <span>
+                    <span className="block text-[15px] font-semibold">{a.nome}</span>
+                    <span className="block text-[13px] leading-snug text-black/60">{sugestao ?? a.explicacao}</span>
+                  </span>
+                </button>
+              )
+            })}
           </div>
         </main>
 
