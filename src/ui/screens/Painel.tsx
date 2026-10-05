@@ -253,7 +253,7 @@ function Painel() {
 
           {/* os atalhos — abaixo do campo de chat, com subtítulo, lado a lado em linha */}
           <div className="flex w-full max-w-xl flex-col gap-3">
-            <p className="text-sm font-semibold uppercase tracking-wide text-white/50">O que você precisa?</p>
+            <p className="text-sm font-semibold text-white/50">Comece por aqui</p>
             <div className="flex gap-3">
               {ATALHOS.map((a) => {
                 const sugestao = insights?.sugestoes[a.chave]
