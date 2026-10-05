@@ -224,7 +224,10 @@ function Painel() {
             {/* marca do Astrodny — só a logo, acima de tudo */}
             <img src="/logo.png" alt="Astrodny" className="mb-8 h-20 w-auto self-center" />
             <p className="text-xl text-white/80">{saudacao()}, Universitário!</p>
-            <h1 key={tituloIdx} className="animar-subida mt-1 text-[28px] font-bold leading-tight lg:text-4xl">
+            <h1
+              key={tituloIdx}
+              className="animar-subida mt-1 overflow-hidden text-ellipsis whitespace-nowrap text-2xl font-bold leading-tight lg:whitespace-normal lg:text-4xl"
+            >
               {titulo}
             </h1>
             {carregandoInsights && (
