@@ -154,6 +154,29 @@ function Painel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usuario?.id])
 
+  const [tituloIdx, setTituloIdx] = useState(0)
+
+  // ao chegar um novo lote de títulos (entrou na tela / terminou de gerar),
+  // começa por um sorteado — não sempre o primeiro, pra não repetir toda vez
+  // a mesma abertura.
+  useEffect(() => {
+    if (insights && insights.titulos.length > 0) {
+      setTituloIdx(Math.floor(Math.random() * insights.titulos.length))
+    }
+  }, [insights])
+
+  // parado no Painel, troca de título devagar — não é um carrossel rápido,
+  // isso competiria com a leitura.
+  useEffect(() => {
+    if (!insights || insights.titulos.length < 2) return
+    const t = setInterval(() => {
+      setTituloIdx((i) => (i + 1) % insights.titulos.length)
+    }, 50_000)
+    return () => clearInterval(t)
+  }, [insights])
+
+  const titulo = insights?.titulos[tituloIdx] ?? 'O que temos para fazer hoje?'
+
   function enviar() {
     const limpo = texto.trim()
     if (!limpo) return
@@ -199,7 +222,9 @@ function Painel() {
           {/* título + campo de chat */}
           <div className="flex flex-col lg:flex-1 lg:max-w-xl">
             <p className="text-xl text-white/80">{saudacao()}, Universitário!</p>
-            <h1 className="mt-1 text-[28px] font-bold leading-tight lg:text-4xl">O que temos para fazer hoje?</h1>
+            <h1 key={tituloIdx} className="animar-subida mt-1 text-[28px] font-bold leading-tight lg:text-4xl">
+              {titulo}
+            </h1>
             {carregandoInsights && (
               <span className="mt-3 inline-flex items-center gap-2 text-sm text-white/50">
                 <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white/70" />
