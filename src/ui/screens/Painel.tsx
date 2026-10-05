@@ -254,7 +254,7 @@ function Painel() {
           {/* os atalhos — abaixo do campo de chat, com subtítulo, lado a lado em linha */}
           <div className="flex w-full max-w-xl -translate-y-2 flex-col gap-3">
             <p className="text-sm font-semibold text-white/50">Comece por aqui</p>
-            <div className="flex gap-3">
+            <div className="flex flex-col gap-3 lg:flex-row">
               {ATALHOS.map((a) => {
                 const sugestao = insights?.sugestoes[a.chave]
                 return (
@@ -262,7 +262,7 @@ function Painel() {
                     key={a.chave}
                     type="button"
                     onClick={() => clicarAtalho(a.chave)}
-                    className="flex flex-1 flex-col items-start gap-2 rounded-xl border border-white/50 bg-white/15 px-4 py-5 text-left text-white shadow-sm backdrop-blur-md transition-all hover:scale-[1.02] hover:border-white/80 hover:bg-white/25 active:bg-white/30"
+                    className="flex flex-1 items-start gap-3 rounded-xl border border-white/50 bg-white/15 px-4 py-5 text-left text-white shadow-sm backdrop-blur-md transition-all hover:scale-[1.02] hover:border-white/80 hover:bg-white/25 active:bg-white/30 lg:flex-col lg:gap-2"
                   >
                     <span className="shrink-0 text-white [&>svg]:h-5 [&>svg]:w-5">{a.icone}</span>
                     <span>
