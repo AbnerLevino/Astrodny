@@ -110,6 +110,7 @@ function Painel() {
   const { chats, criarChat } = useChats()
   const [menuAberto, setMenuAberto] = useState(false)
   const [texto, setTexto] = useState('')
+  const [focado, setFocado] = useState(false) // campo em foco? abre pra largura total
   const [emBreve, setEmBreve] = useState<'trabalhos' | 'provas' | null>(null)
   const [insights, setInsights] = useState<InsightsPainel | null>(null)
   const [carregandoInsights, setCarregandoInsights] = useState(false)
@@ -209,10 +210,10 @@ function Painel() {
           <div className="flex w-full max-w-xl flex-col">
             {/* marca do Astrodny — só a logo, acima de tudo */}
             <img src="/logo.png" alt="Astrodny" className="mb-8 h-20 w-auto -translate-y-4 self-center lg:translate-y-0" />
-            <p className="text-xl text-white/80">{saudacao()}, Universitário!</p>
+            <p className="text-center text-xl text-white/80">{saudacao()}, Universitário!</p>
             <h1
               key={tituloIdx}
-              className="animar-subida mt-1 overflow-hidden text-ellipsis whitespace-nowrap text-2xl font-bold leading-tight lg:whitespace-normal lg:text-4xl"
+              className="animar-subida mt-1 overflow-hidden text-ellipsis whitespace-nowrap text-center text-2xl font-bold leading-tight lg:whitespace-normal lg:text-4xl"
             >
               {titulo}
             </h1>
@@ -223,10 +224,16 @@ function Painel() {
               </span>
             )}
 
-            <div className="mt-6 flex items-center gap-2 rounded-[26px] border border-white/50 bg-white/5 pl-4 pr-2 py-1.5 backdrop-blur-md">
+            <div
+              className={`mt-6 flex items-center gap-2 self-center rounded-[26px] border border-white/50 bg-white/5 pl-4 pr-2 py-1.5 backdrop-blur-md transition-all duration-300 ease-out ${
+                focado ? 'w-full' : 'w-[75%]'
+              }`}
+            >
               <input
                 value={texto}
                 onChange={(e) => setTexto(e.target.value)}
+                onFocus={() => setFocado(true)}
+                onBlur={() => setFocado(false)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
                     e.preventDefault()
