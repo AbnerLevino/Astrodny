@@ -222,7 +222,7 @@ function Painel() {
           {/* título + campo de chat — sobe um pouco em relação ao centro */}
           <div className="flex -translate-y-10 flex-col lg:-translate-y-16 lg:flex-1 lg:max-w-xl">
             {/* marca do Astrodny — só a logo, acima de tudo */}
-            <img src="/logo.png" alt="Astrodny" className="mb-4 h-20 w-auto self-center" />
+            <img src="/logo.png" alt="Astrodny" className="mb-8 h-20 w-auto self-center" />
             <p className="text-xl text-white/80">{saudacao()}, Universitário!</p>
             <h1 key={tituloIdx} className="animar-subida mt-1 text-[28px] font-bold leading-tight lg:text-4xl">
               {titulo}
