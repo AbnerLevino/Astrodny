@@ -60,19 +60,19 @@ const ATALHOS: Atalho[] = [
   {
     chave: 'estudar',
     nome: 'Estudar',
-    explicacao: 'Jogue um PDF ou digite um tema e aprenda em porções, no seu ritmo.',
+    explicacao: 'Entenda, pratique e revise qualquer matéria no seu ritmo.',
     icone: <IconeEstudarAtalho />,
   },
   {
     chave: 'trabalhos',
     nome: 'Trabalhos',
-    explicacao: 'Monte um trabalho formatado em ABNT, do sumário à entrega.',
+    explicacao: 'Crie, organize e formate seu trabalho acadêmico em ABNT.',
     icone: <IconeTrabalhosAtalho />,
   },
   {
     chave: 'provas',
     nome: 'Provas',
-    explicacao: 'Treine pra uma prova ou concurso com cronômetro, acertos e erros.',
+    explicacao: 'Treine, cronometre e acompanhe sua evolução pra prova.',
     icone: <IconeProvasAtalho />,
   },
 ]
