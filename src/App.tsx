@@ -1,13 +1,16 @@
 import { Routes, Route } from 'react-router-dom'
-import Home from './ui/screens/Home'
+import Painel from './ui/screens/Painel'
+import Conversa from './ui/screens/Conversa'
 import StudySession from './ui/screens/StudySession'
 import Settings from './ui/screens/Settings'
 
 /*
   Moldura de celular + rotas.
-  "/"        -> Home (a conversa acontece aqui mesmo, inline)
-  "/estudar" -> Sessão de Estudo (o fluxo de 5 telas)
-  "/config"  -> Configurações (personalidade do tutor, etc.)
+  "/"         -> Painel (tela inicial: título + sugestões + os 4 atalhos)
+  "/chat"     -> Conversa, chat em branco (a conversa acontece aqui, inline)
+  "/chat/:id" -> Conversa, abre um chat existente do histórico
+  "/estudar"  -> Sessão de Estudo (o fluxo de 5 telas)
+  "/config"   -> Configurações (personalidade do tutor, etc.)
 */
 function App() {
   return (
@@ -16,7 +19,9 @@ function App() {
           app ocupa a largura toda, pra caber a sidebar fixa + o conteúdo. */}
       <div className="w-full max-w-[440px] lg:max-w-none">
         <Routes>
-          <Route path="/" element={<Home />} />
+          <Route path="/" element={<Painel />} />
+          <Route path="/chat" element={<Conversa />} />
+          <Route path="/chat/:id" element={<Conversa />} />
           <Route path="/estudar" element={<StudySession />} />
           <Route path="/config" element={<Settings />} />
         </Routes>
