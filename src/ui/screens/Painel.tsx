@@ -262,7 +262,7 @@ function Painel() {
                     key={a.chave}
                     type="button"
                     onClick={() => clicarAtalho(a.chave)}
-                    className="flex flex-1 items-center gap-3 rounded-xl border border-white/50 bg-white/15 px-4 py-5 text-left text-white shadow-sm backdrop-blur-md transition-all hover:scale-[1.02] hover:border-white/80 hover:bg-white/25 active:bg-white/30 lg:flex-col lg:items-start lg:gap-2"
+                    className="flex flex-1 items-center gap-3 rounded-xl border border-white/50 bg-white/15 px-3 py-3 text-left text-white shadow-sm backdrop-blur-md transition-all hover:scale-[1.02] hover:border-white/80 hover:bg-white/25 active:bg-white/30 lg:flex-col lg:items-start lg:gap-2 lg:px-4 lg:py-5"
                   >
                     <span className="shrink-0 text-white [&>svg]:h-7 [&>svg]:w-7 lg:[&>svg]:h-5 lg:[&>svg]:w-5">{a.icone}</span>
                     <span>
