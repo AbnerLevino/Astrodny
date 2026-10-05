@@ -14,4 +14,8 @@ export type Mensagem = { autor: 'user' | 'ia'; texto: string }
 // É o que a gente vai persistir no histórico.
 // `fixado?` é OPCIONAL de propósito: os chats já salvos no localStorage (que não
 // têm esse campo) continuam válidos — undefined conta como "não fixado".
-export type Chat = { id: string; titulo: string; mensagens: Mensagem[]; fixado?: boolean }
+// `criadoEm?` é OPCIONAL de propósito, igual `fixado?`: chats já salvos no
+// localStorage antes dessa feature existir não têm esse campo — undefined
+// significa "não sabemos quando foi criado" (fica de fora da amostra de
+// temas recentes do Painel, ver application/amostraChats.ts).
+export type Chat = { id: string; titulo: string; mensagens: Mensagem[]; fixado?: boolean; criadoEm?: number }

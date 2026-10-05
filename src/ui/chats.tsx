@@ -101,7 +101,7 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
     const id = novoId()
     const titulo = primeiraMensagem.trim().slice(0, 40) || 'Novo chat'
     const mensagens: Mensagem[] = [{ autor: 'user', texto: primeiraMensagem }]
-    setChats((prev) => [{ id, titulo, mensagens }, ...prev]) // mais novo no topo
+    setChats((prev) => [{ id, titulo, mensagens, criadoEm: Date.now() }, ...prev]) // mais novo no topo
     setChatAtivo(id) // já abre esse chat na Home
     responderIA(id, mensagens) // dispara a resposta da IA
     return id
