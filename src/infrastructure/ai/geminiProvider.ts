@@ -9,6 +9,7 @@
   pro resto do app, é só mais um AIProvider.
 */
 import type { AIProvider } from '../../application/ports/AIProvider'
+import { IALimiteError, ehStatusDeLimite } from '../../application/ports/aiErrors'
 
 const KEY = import.meta.env.VITE_GEMINI_API_KEY ?? ''
 const MODELO = import.meta.env.VITE_GEMINI_MODEL ?? 'gemini-2.0-flash'
@@ -30,7 +31,10 @@ export const geminiProvider: AIProvider = {
       headers: { 'Content-Type': 'application/json' },
       body: corpo(prompt, opcoes?.json),
     })
-    if (!r.ok) throw new Error(`Gemini respondeu ${r.status}`)
+    if (!r.ok) {
+      if (ehStatusDeLimite(r.status)) throw new IALimiteError(undefined, r.status)
+      throw new Error(`Gemini respondeu ${r.status}`)
+    }
     const d = await r.json()
     return d.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
   },
@@ -42,7 +46,10 @@ export const geminiProvider: AIProvider = {
       headers: { 'Content-Type': 'application/json' },
       body: corpo(prompt),
     })
-    if (!r.ok || !r.body) throw new Error(`Gemini respondeu ${r.status}`)
+    if (!r.ok || !r.body) {
+      if (ehStatusDeLimite(r.status)) throw new IALimiteError(undefined, r.status)
+      throw new Error(`Gemini respondeu ${r.status}`)
+    }
 
     const decoder = new TextDecoder()
     let buffer = ''

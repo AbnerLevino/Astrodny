@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Supabase CLI: estado local da máquina (link do projeto, versões) — não é
+# config do projeto, é regenerado por `supabase link`/`supabase start`.
+supabase/.temp

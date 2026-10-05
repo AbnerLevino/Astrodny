@@ -61,6 +61,29 @@ create index idx_astrocore_dataset_subject on astrocore_dataset(subject);
 create index idx_astrocore_dataset_created_at on astrocore_dataset(created_at);
 ```
 
+### 2.5.1 Perfil do aluno (tabela `perfis`) — onboarding pós-login Google
+Guarda curso, nível e as matérias/assuntos que o aluno está estudando agora (texto
+livre, vírgula-separado no onboarding → array no banco). Alimenta o `systemPromptTutor`
+pra a IA inferir o assunto sem perguntar de novo (ver `src/application/prompts.ts`).
+
+```sql
+create table perfis (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  nome text not null,
+  curso text,
+  nivel text,
+  materias text[],
+  updated_at timestamptz not null default now()
+);
+
+alter table perfis enable row level security;
+
+create policy "cada um só vê/edita o próprio perfil"
+  on perfis for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+```
+
 ### 2.6 Acesso restrito (piloto com a amiga)
 - O "ambiente de teste da amiga" **é o deploy de produção**, apenas **não divulgado**.
 - Para trancar de verdade, opcional: um **PIN** simples combinado (grátis, trivial).

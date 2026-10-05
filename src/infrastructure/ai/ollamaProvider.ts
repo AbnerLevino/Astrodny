@@ -10,6 +10,7 @@
   `const ia = mockProvider` -> `const ia = ollamaProvider`.
 */
 import type { AIProvider, GenerateOptions } from '../../application/ports/AIProvider'
+import { IALimiteError, ehStatusDeLimite } from '../../application/ports/aiErrors'
 
 // Configuração num lugar só. Vem de variável de ambiente (.env.local), com um padrão
 // seguro pra não quebrar sem config. Assim trocamos ONDE a IA roda SEM tocar em código:
@@ -31,6 +32,11 @@ const TIMEOUT_MS = 180000 // 3 min
 // termina. Precisa ser FOLGADO pro modo "completa" (blocos de 4-7 parágrafos densos ×
 // vários blocos passam de 4k tokens); baixo demais TRUNCA o JSON e o estudo quebra no parse.
 const NUM_PREDICT = 6144
+
+// TEMPERATURA do chat. Mais baixa = modelo menos "criativo" e menos propenso a INVENTAR
+// fatos/números (alucinação) quando não sabe. O padrão do Ollama (~0.8) favorece invenção;
+// 0.3 mantém a resposta fluida mas mais ancorada. Vale pro chat (generateStream).
+const TEMPERATURA_CHAT = 0.3
 
 // Formato de cada linha que o Ollama devolve (tanto no stream quanto no completo).
 // Só listamos os campos que a gente usa; o Ollama manda vários outros (metadados).
@@ -61,6 +67,7 @@ export const ollamaProvider: AIProvider = {
         signal: controlador.signal,
       })
       if (!resposta.ok) {
+        if (ehStatusDeLimite(resposta.status)) throw new IALimiteError(undefined, resposta.status)
         throw new Error(`Ollama respondeu ${resposta.status}. O servidor está rodando?`)
       }
       const dados = (await resposta.json()) as OllamaLinha
@@ -84,9 +91,10 @@ export const ollamaProvider: AIProvider = {
     const resposta = await fetch(`${URL}/api/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: MODELO, prompt, stream: true }),
+      body: JSON.stringify({ model: MODELO, prompt, stream: true, options: { temperature: TEMPERATURA_CHAT } }),
     })
     if (!resposta.ok || !resposta.body) {
+      if (ehStatusDeLimite(resposta.status)) throw new IALimiteError(undefined, resposta.status)
       throw new Error(`Ollama respondeu ${resposta.status}. O servidor está rodando?`)
     }
 

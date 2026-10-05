@@ -18,6 +18,15 @@ export type Mode = 'objetiva' | 'completa'
 // Um estudo é inteiro de um formato só — não mistura perguntas das duas naturezas.
 export type Formato = 'multipla_escolha' | 'discursivo'
 
+// AJUSTES opcionais do estudo (o bloco "Ajustes do estudo", opt-in na Tela 1).
+// Estrutura previsível vive aqui (botões), não no texto livre do aluno:
+//   numTopicos: null/ausente = AUTOMÁTICO (a IA decide pelo material); 1..10 = fixo.
+//   incluirCodigo: liga trechos de código + aplicação prática (matérias técnicas).
+export type EstudoConfig = {
+  numTopicos?: number | null
+  incluirCodigo?: boolean
+}
+
 /*
   Uma PERGUNTA é uma de duas formas. Isto é uma UNIÃO DISCRIMINADA: o campo
   `tipo` é a etiqueta que diz QUAL das duas é. Com ela, o TypeScript sabe, dentro
@@ -106,6 +115,9 @@ export type CorrecaoDiscursiva = {
   acertou: boolean // true se nota >= 60 (limiar de aprovação)
   porque: string   // por que essa nota: o que faltou ou errou
   melhoria: string // 1 sugestão concreta pra melhorar a resposta
+  // pontos-chave que a resposta NÃO cobriu (ou cobriu errado). Ancora a nota no checklist
+  // e permite mostrar ao aluno exatamente o que faltou. Opcional: modelo pode omitir.
+  pontosFaltantes?: string[]
 }
 
 // o resultado da prova discursiva: a % média de acerto + a correção de cada questão.

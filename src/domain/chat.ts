@@ -12,4 +12,6 @@ export type Mensagem = { autor: 'user' | 'ia'; texto: string }
 
 // uma conversa inteira: id, título (derivado da 1ª mensagem) e as mensagens.
 // É o que a gente vai persistir no histórico.
-export type Chat = { id: string; titulo: string; mensagens: Mensagem[] }
+// `fixado?` é OPCIONAL de propósito: os chats já salvos no localStorage (que não
+// têm esse campo) continuam válidos — undefined conta como "não fixado".
+export type Chat = { id: string; titulo: string; mensagens: Mensagem[]; fixado?: boolean }

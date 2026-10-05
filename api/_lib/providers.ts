@@ -9,6 +9,7 @@
   onde o segredo continua secreto.
 */
 import type { AIProvider, GenerateOptions } from '../../src/application/ports/AIProvider'
+import { IALimiteError, ehStatusDeLimite } from '../../src/application/ports/aiErrors'
 
 // ----- GROQ (API compatível com a da OpenAI) -----
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
@@ -29,7 +30,10 @@ export const groqProvider: AIProvider = {
         ...(opcoes?.json ? { response_format: { type: 'json_object' } } : {}),
       }),
     })
-    if (!r.ok) throw new Error(`Groq respondeu ${r.status}`)
+    if (!r.ok) {
+      if (ehStatusDeLimite(r.status)) throw new IALimiteError(undefined, r.status)
+      throw new Error(`Groq respondeu ${r.status}`)
+    }
     const d = await r.json()
     return d.choices?.[0]?.message?.content ?? ''
   },
@@ -40,7 +44,10 @@ export const groqProvider: AIProvider = {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_KEY}` },
       body: JSON.stringify({ model: GROQ_MODEL, messages: [{ role: 'user', content: prompt }], stream: true }),
     })
-    if (!r.ok || !r.body) throw new Error(`Groq respondeu ${r.status}`)
+    if (!r.ok || !r.body) {
+      if (ehStatusDeLimite(r.status)) throw new IALimiteError(undefined, r.status)
+      throw new Error(`Groq respondeu ${r.status}`)
+    }
     const decoder = new TextDecoder()
     let buffer = ''
     for await (const bytes of r.body as unknown as AsyncIterable<Uint8Array>) {
@@ -58,6 +65,62 @@ export const groqProvider: AIProvider = {
           if (pedaco) yield pedaco
         } catch {
           /* linha parcial / keep-alive: ignora */
+        }
+      }
+    }
+  },
+}
+
+// ----- CLOUDFLARE WORKERS AI (free tier, entra na FRENTE na cadeia do CHAT) -----
+const CF_ACCOUNT_ID = process.env.CF_ACCOUNT_ID ?? ''
+const CF_KEY = process.env.CF_API_TOKEN ?? ''
+const CF_MODEL = process.env.CF_MODEL ?? '@cf/meta/llama-3.1-8b-instruct-fast'
+const CF_BASE = 'https://api.cloudflare.com/client/v4/accounts'
+
+export const cloudflareConfigurado = CF_ACCOUNT_ID.length > 0 && CF_KEY.length > 0
+
+export const cloudflareProvider: AIProvider = {
+  async generate(prompt) {
+    const r = await fetch(`${CF_BASE}/${CF_ACCOUNT_ID}/ai/run/${CF_MODEL}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${CF_KEY}` },
+      body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] }),
+    })
+    if (!r.ok) {
+      if (ehStatusDeLimite(r.status)) throw new IALimiteError(undefined, r.status)
+      throw new Error(`Cloudflare respondeu ${r.status}`)
+    }
+    const d = await r.json()
+    return d.result?.response ?? ''
+  },
+
+  async *generateStream(prompt) {
+    const r = await fetch(`${CF_BASE}/${CF_ACCOUNT_ID}/ai/run/${CF_MODEL}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${CF_KEY}` },
+      body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], stream: true }),
+    })
+    if (!r.ok || !r.body) {
+      if (ehStatusDeLimite(r.status)) throw new IALimiteError(undefined, r.status)
+      throw new Error(`Cloudflare respondeu ${r.status}`)
+    }
+    const decoder = new TextDecoder()
+    let buffer = ''
+    for await (const bytes of r.body as unknown as AsyncIterable<Uint8Array>) {
+      buffer += decoder.decode(bytes, { stream: true })
+      const linhas = buffer.split('\n')
+      buffer = linhas.pop() ?? ''
+      for (const linha of linhas) {
+        const t = linha.trim()
+        if (!t.startsWith('data:')) continue
+        const dados = t.slice(5).trim()
+        if (dados === '[DONE]') return
+        try {
+          const json = JSON.parse(dados)
+          const pedaco = json.response
+          if (pedaco) yield pedaco
+        } catch {
+          /* linha parcial: ignora */
         }
       }
     }
@@ -85,7 +148,10 @@ export const geminiProvider: AIProvider = {
       headers: { 'Content-Type': 'application/json' },
       body: geminiCorpo(prompt, opcoes?.json),
     })
-    if (!r.ok) throw new Error(`Gemini respondeu ${r.status}`)
+    if (!r.ok) {
+      if (ehStatusDeLimite(r.status)) throw new IALimiteError(undefined, r.status)
+      throw new Error(`Gemini respondeu ${r.status}`)
+    }
     const d = await r.json()
     return d.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
   },
@@ -96,7 +162,10 @@ export const geminiProvider: AIProvider = {
       headers: { 'Content-Type': 'application/json' },
       body: geminiCorpo(prompt),
     })
-    if (!r.ok || !r.body) throw new Error(`Gemini respondeu ${r.status}`)
+    if (!r.ok || !r.body) {
+      if (ehStatusDeLimite(r.status)) throw new IALimiteError(undefined, r.status)
+      throw new Error(`Gemini respondeu ${r.status}`)
+    }
     const decoder = new TextDecoder()
     let buffer = ''
     for await (const bytes of r.body as unknown as AsyncIterable<Uint8Array>) {

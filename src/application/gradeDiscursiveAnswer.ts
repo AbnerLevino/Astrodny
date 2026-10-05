@@ -95,5 +95,9 @@ function validarCorrecao(valor: unknown): CorrecaoDiscursiva {
 
   const porque = typeof o.porque === 'string' ? o.porque : ''
   const melhoria = typeof o.melhoria === 'string' ? o.melhoria : ''
-  return { nota, acertou, porque, melhoria }
+  // pontosFaltantes é OPCIONAL: só aceita um array de strings; qualquer outra coisa vira undefined
+  const pontosFaltantes = Array.isArray(o.pontosFaltantes)
+    ? o.pontosFaltantes.filter((x): x is string => typeof x === 'string')
+    : undefined
+  return { nota, acertou, porque, melhoria, pontosFaltantes }
 }

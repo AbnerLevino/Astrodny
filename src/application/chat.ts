@@ -12,16 +12,19 @@
 import type { AIProvider } from './ports/AIProvider'
 import type { Mensagem } from '../domain/chat'
 import type { Personalidade } from '../domain/settings'
+import type { Perfil } from '../domain/perfil'
 import { systemPromptTutor } from './prompts'
 
 // Devolve a resposta da IA em pedaços (stream), a partir do histórico da conversa.
 // A personalidade define o TOM do tutor (escolhida pelo usuário nas Configurações).
+// O perfil (quem está logado) é opcional — quem usa anônimo não manda nada aqui.
 export function chat(
   historico: Mensagem[],
   ia: AIProvider,
   personalidade: Personalidade,
+  perfil?: Perfil,
 ): AsyncIterable<string> {
-  const prompt = montarPrompt(historico, personalidade)
+  const prompt = montarPrompt(historico, personalidade, perfil)
   return ia.generateStream(prompt)
 }
 
@@ -29,8 +32,8 @@ export function chat(
 // Começa pela "instrução de sistema" (quem o tutor é), depois o histórico.
 // Exportada (mesmo sendo um detalhe) pra ter teste próprio — é uma peça pura,
 // fácil de quebrar sem perceber quando mexermos no formato do prompt.
-export function montarPrompt(historico: Mensagem[], personalidade: Personalidade): string {
-  const sistema = systemPromptTutor(personalidade)
+export function montarPrompt(historico: Mensagem[], personalidade: Personalidade, perfil?: Perfil): string {
+  const sistema = systemPromptTutor(personalidade, perfil)
   const conversa = historico
     .map((m) => `${m.autor === 'user' ? 'Aluno' : 'Assistente'}: ${m.texto}`)
     .join('\n')

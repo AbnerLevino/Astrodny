@@ -12,6 +12,7 @@
     generateStream→ POST /api/stream   {prompt, device}       → corpo de TEXTO puro (pedaços)
 */
 import type { AIProvider, GenerateOptions } from '../../application/ports/AIProvider'
+import { IALimiteError, ehStatusDeLimite } from '../../application/ports/aiErrors'
 import { deviceAnon } from './deviceAnon'
 
 export const proxyProvider: AIProvider = {
@@ -22,7 +23,10 @@ export const proxyProvider: AIProvider = {
       body: JSON.stringify({ prompt, json: opcoes?.json, device: deviceAnon() }),
     })
     const d = await r.json().catch(() => ({}) as { text?: string; error?: string })
-    if (!r.ok) throw new Error(d.error ?? `O servidor respondeu ${r.status}.`)
+    if (!r.ok) {
+      if (ehStatusDeLimite(r.status)) throw new IALimiteError(d.error || undefined, r.status)
+      throw new Error(d.error ?? `O servidor respondeu ${r.status}.`)
+    }
     return d.text ?? ''
   },
 
@@ -32,12 +36,29 @@ export const proxyProvider: AIProvider = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt, device: deviceAnon() }),
     })
-    if (!r.ok || !r.body) throw new Error(`O servidor respondeu ${r.status}.`)
-    // o corpo é texto puro em pedaços — lê conforme chega e repassa (mesmo padrão dos outros providers)
+    if (!r.ok || !r.body) {
+      if (ehStatusDeLimite(r.status)) throw new IALimiteError(undefined, r.status)
+      throw new Error(`O servidor respondeu ${r.status}.`)
+    }
+    // o corpo é texto puro em pedaços — lê conforme chega e repassa (mesmo padrão dos outros providers).
+    // O /api/stream responde sempre 200 e, se a cadeia falhar ANTES de escrever, injeta um
+    // sentinel no PRIMEIRO pedaço: "[erro:limite] ..." (sobrecarga) ou "[erro] ..." (falha geral).
+    // A gente detecta isso no 1º pedaço e converte no erro tipado — pra não exibir "[erro]" como texto.
     const decoder = new TextDecoder()
+    let primeiro = true
     for await (const bytes of r.body as unknown as AsyncIterable<Uint8Array>) {
       const texto = decoder.decode(bytes, { stream: true })
-      if (texto) yield texto
+      if (!texto) continue
+      if (primeiro) {
+        primeiro = false
+        if (texto.startsWith('[erro:limite]')) {
+          throw new IALimiteError(texto.replace('[erro:limite]', '').trim() || undefined)
+        }
+        if (texto.startsWith('[erro]')) {
+          throw new Error(texto.replace('[erro]', '').trim() || 'Falha no stream.')
+        }
+      }
+      yield texto
     }
   },
 }

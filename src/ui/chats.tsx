@@ -15,24 +15,35 @@ import { chat } from '../application/chat'
 import { ollamaProvider } from '../infrastructure/ai/ollamaProvider'
 import { groqProvider, groqConfigurado } from '../infrastructure/ai/groqProvider'
 import { geminiProvider, geminiConfigurado } from '../infrastructure/ai/geminiProvider'
+import { cloudflareProvider, cloudflareConfigurado } from '../infrastructure/ai/cloudflareProvider'
 import { fallbackProvider } from '../infrastructure/ai/fallbackProvider'
 import { proxyProvider } from '../infrastructure/ai/proxyProvider'
+import { retryProvider } from '../infrastructure/ai/retryProvider'
+import { ehLimite } from '../application/ports/aiErrors'
 import { localStorageChatRepository } from '../infrastructure/storage/localStorageChatRepository'
 import { useSettings } from './settings'
+import { useAuth } from './auth'
 
 export type { Mensagem, Chat } // reexporta pra quem já importava daqui não quebrar
 
 // CADEIA DE IA DO CHAT.
-// EM PRODUÇÃO: tudo pelo proxy (/api/*) — as chaves ficam no servidor, a cadeia roteia lá.
-// EM DEV: nuvem primeiro (só quem tem chave no .env.local), Ollama local por último como
-// rede de segurança, pra o chat nunca ficar mudo se a nuvem cair/estourar.
-const ia = import.meta.env.PROD
-  ? proxyProvider
-  : fallbackProvider([
-      ...(geminiConfigurado ? [geminiProvider] : []),
-      ...(groqConfigurado ? [groqProvider] : []),
-      ollamaProvider,
-    ])
+// EM PRODUÇÃO: tudo pelo proxy (/api/*) — as chaves ficam no servidor, a cadeia roteia lá
+// (ver api/_lib/chain.ts: cadeiaChat() — Cloudflare primeiro, igual aqui).
+// EM DEV: Cloudflare primeiro (free tier mais rápido medido pro chat — TTFT < 0,4s contra
+// 4-11s do Gemini em prompts médios/complexos, ver docs/Infraestrutura.md), Gemini/Groq
+// de reserva, Ollama local por último como rede de segurança.
+// retryProvider por fora: num pico de 429, espera (backoff) e tenta de novo UMA vez,
+// em silêncio — o aluno nem percebe. Vale tanto pro proxy (prod) quanto pra cadeia (dev).
+const ia = retryProvider(
+  import.meta.env.PROD
+    ? proxyProvider
+    : fallbackProvider([
+        ...(cloudflareConfigurado ? [cloudflareProvider] : []),
+        ...(geminiConfigurado ? [geminiProvider] : []),
+        ...(groqConfigurado ? [groqProvider] : []),
+        ollamaProvider,
+      ]),
+)
 // Onde os chats são guardados. Trocar localStorage -> nuvem é mudar SÓ esta linha.
 const repo = localStorageChatRepository
 
@@ -55,6 +66,9 @@ type ChatsContexto = {
   editarMensagem: (id: string, index: number, novoTexto: string) => void
   pararResposta: (id: string) => void // cancela a resposta pendente daquele chat
   obterChat: (id: string) => Chat | undefined
+  renomearChat: (id: string, novoTitulo: string) => void // troca o título do chat
+  alternarFixar: (id: string) => void // liga/desliga o "fixado no topo"
+  excluirChat: (id: string) => void // remove o chat do histórico
 }
 
 const Contexto = createContext<ChatsContexto | null>(null)
@@ -65,6 +79,8 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
   const [chatAtivoId, setChatAtivo] = useState<string | null>(null)
   // personalidade escolhida nas Configurações — define o tom das respostas da IA
   const { personalidade } = useSettings()
+  // perfil de quem está logado (Google) — undefined pra quem usa anônimo
+  const { perfil } = useAuth()
 
   // salva sempre que a lista de chats muda (nova mensagem, novo chat, etc.)
   // Obs: durante o "digitar" da IA isso salva a cada palavra — aceitável na Fase 0;
@@ -128,7 +144,7 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
 
     let iaCriada = false
     try {
-      for await (const pedaco of chat(historico, ia, personalidade)) {
+      for await (const pedaco of chat(historico, ia, personalidade, perfil ?? undefined)) {
         if (controller.signal.aborted) break
         if (!iaCriada) {
           adicionarMensagemIA(id, pedaco) // 1º pedaço: nasce a mensagem da IA
@@ -136,6 +152,18 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
         } else {
           anexarNaUltima(id, pedaco) // demais pedaços: crescem no final
         }
+      }
+    } catch (e) {
+      // já tentou re-tentar (retryProvider) e ainda falhou → mostra um aviso no lugar do silêncio.
+      // Limite = sobrecarga (temporário); qualquer outro = falha genérica. (Aborto manual não cai aqui.)
+      if (controller.signal.aborted) {
+        // nada: o aluno mandou parar
+      } else {
+        const aviso = ehLimite(e)
+          ? '⚠️ A IA está sobrecarregada agora. Tente de novo em alguns instantes.'
+          : '⚠️ Não consegui responder agora. Tente de novo.'
+        if (!iaCriada) adicionarMensagemIA(id, aviso)
+        else anexarNaUltima(id, '\n\n' + aviso)
       }
     } finally {
       // só desliga o "gerando" se ninguém iniciou outra geração no meio do caminho
@@ -177,9 +205,28 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
     return chats.find((c) => c.id === id)
   }
 
+  // Renomeia o chat. Ignora nome vazio e corta em 60 chars (cabe na sidebar).
+  function renomearChat(id: string, novoTitulo: string) {
+    const limpo = novoTitulo.trim()
+    if (!limpo) return
+    setChats((prev) => prev.map((c) => (c.id === id ? { ...c, titulo: limpo.slice(0, 60) } : c)))
+  }
+
+  // Liga/desliga o "fixado". A ORDENAÇÃO (fixados no topo) é feita na tela, não aqui:
+  // o estado só guarda o fato; quem desenha decide como mostrar.
+  function alternarFixar(id: string) {
+    setChats((prev) => prev.map((c) => (c.id === id ? { ...c, fixado: !c.fixado } : c)))
+  }
+
+  // Remove o chat. Se era o que estava aberto na Home, volta pra saudação (null).
+  function excluirChat(id: string) {
+    setChats((prev) => prev.filter((c) => c.id !== id))
+    setChatAtivo((atual) => (atual === id ? null : atual))
+  }
+
   return (
     <Contexto.Provider
-      value={{ chats, chatAtivoId, pensandoId, setChatAtivo, criarChat, enviarMensagem, editarMensagem, pararResposta, obterChat }}
+      value={{ chats, chatAtivoId, pensandoId, setChatAtivo, criarChat, enviarMensagem, editarMensagem, pararResposta, obterChat, renomearChat, alternarFixar, excluirChat }}
     >
       {children}
     </Contexto.Provider>

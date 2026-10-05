@@ -7,10 +7,13 @@
 */
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import Sidebar, { LARGURA_MENU } from './Sidebar'
+import Sidebar from './Sidebar'
+import { AbasFluxo } from '../abas'
 import { useChats } from '../chats'
+import { extrairAcao } from '../../application/chatAction'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import rehypeHighlight from 'rehype-highlight'
 
 const ALTURA_MAX = 160 // teto do campo (px): passou disso, rola em vez de crescer
 // status "pensando" (fake por enquanto; depois refletem as fases reais da IA)
@@ -25,13 +28,16 @@ function saudacao(): string {
 }
 
 function Home() {
+  const navigate = useNavigate()
   const [menuAberto, setMenuAberto] = useState(false)
+  // true enquanto o mouse está sobre o CTA "Descubra o Astro!" (visitante, sem
+  // login) na Sidebar — revela a aurora de fundo por baixo do véu escuro.
+  const [auroraAtiva, setAuroraAtiva] = useState(false)
   const [texto, setTexto] = useState('')
   const [focado, setFocado] = useState(false) // campo em foco? controla a expansão/descida do composer
   const [statusIdx, setStatusIdx] = useState(0)
   const areaRef = useRef<HTMLTextAreaElement>(null)
   const fimRef = useRef<HTMLDivElement>(null)
-  const navigate = useNavigate()
   const { criarChat, enviarMensagem, editarMensagem, pararResposta, obterChat, chatAtivoId, pensandoId } = useChats()
 
   const chatAtivo = chatAtivoId ? obterChat(chatAtivoId) : undefined
@@ -80,14 +86,15 @@ function Home() {
   const escrevendo = gerando && ultima?.autor === 'ia' // já está digitando o texto (cursor)
 
   return (
-    // frame: o Sidebar fica FIXO atras (esquerda); o conteudo desliza pra
-    // direita e desfoca quando o menu abre. overflow-hidden corta o excesso.
-    <div className="relative overflow-hidden min-h-dvh bg-[#1a1a1c]">
-      <Sidebar aoSelecionar={() => setMenuAberto(false)} />
+    // frame: no MOBILE a Sidebar fica FIXA atras (esquerda) e o conteudo desliza
+    // pra direita + desfoca ao abrir o menu (overflow-hidden corta o excesso).
+    // No DESKTOP (lg+) vira flex: a Sidebar é coluna fixa e o conteudo ocupa o resto
+    // (lg:flex-1), sem deslizar nem desfocar (lg:translate-x-0 lg:blur-none).
+    <div className="relative overflow-hidden min-h-dvh bg-[#1a1a1c] lg:flex">
+      <Sidebar aoSelecionar={() => setMenuAberto(false)} aoAuroraHover={setAuroraAtiva} />
 
       <div
-        className={`relative z-10 min-h-dvh transition-all duration-300 ${menuAberto ? 'blur-[2px]' : ''}`}
-        style={{ transform: menuAberto ? `translateX(${LARGURA_MENU})` : 'translateX(0)' }}
+        className={`relative z-10 min-h-dvh transition-all duration-300 lg:flex-1 lg:translate-x-0 lg:blur-none ${menuAberto ? 'translate-x-[78%] blur-[2px]' : 'translate-x-0'}`}
       >
         {/* camada de fundo AURORA: manchas de azul que orbitam e se misturam */}
         <div className="fundo-aurora absolute inset-0 -z-30">
@@ -98,20 +105,22 @@ function Home() {
         {/* camada escura que surge quando há conversa ativa (troca animada).
             NÃO cobre 100%: fica semitransparente pra a aurora continuar aparecendo
             por baixo, só que bem mais fraca. Na home (sem chat) ela some e a aurora
-            volta no talo. */}
+            volta no talo. Some também (opacity-0) enquanto auroraAtiva: é o gatilho
+            do hover no CTA "Descubra o Astro!", que acende a aurora cheia da página. */}
         <div
-          className={`absolute inset-0 -z-20 bg-[#1e1f24] transition-opacity duration-500 ${chatAtivo ? 'opacity-[0.82]' : 'opacity-0'}`}
+          className={`absolute inset-0 -z-20 bg-[#1e1f24] transition-opacity duration-500 ${auroraAtiva ? 'opacity-0' : chatAtivo ? 'opacity-[0.82] lg:opacity-[0.85]' : 'opacity-0'}`}
         />
         {/* camada CINZA que surge com fade ao abrir o menu */}
         <div
-          className={`absolute inset-0 -z-10 bg-[#2e2f36] transition-opacity duration-300 ${menuAberto ? 'opacity-100' : 'opacity-0'}`}
+          className={`absolute inset-0 -z-10 bg-[#2e2f36] transition-opacity duration-300 ${!auroraAtiva && menuAberto ? 'opacity-100' : 'opacity-0'}`}
         />
 
         {/* conteudo real, acima das duas camadas de fundo */}
         <div className="relative h-dvh flex flex-col text-white">
           {/* ===== ZONA 1: topo (avatar + logo) — SOBREPOSTO; as mensagens rolam por trás ===== */}
           <header className="absolute top-0 inset-x-0 z-20 flex items-center justify-between px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-2">
-            <button type="button" aria-label="Abrir menu" onClick={() => setMenuAberto(true)} className="shrink-0">
+            {/* no desktop a sidebar já está sempre visível, então o atalho "foto abre menu" some */}
+            <button type="button" aria-label="Abrir menu" onClick={() => setMenuAberto(true)} className="shrink-0 lg:hidden">
               <img src="/perfil.png" alt="Foto de perfil" className="h-12 w-12 rounded-full object-cover border-2 border-white" />
             </button>
             <img src="/logo.png" alt="Astrodny" className="h-9 w-auto" />
@@ -125,7 +134,7 @@ function Home() {
 
           {/* ===== ZONA 2: saudação OU conversa (mesma tela) ===== */}
           {chatAtivo ? (
-            <main className="flex-1 overflow-y-auto sem-scrollbar px-4 pb-[calc(11rem+var(--kb,0px))] pt-[calc(env(safe-area-inset-top)+5rem)] flex flex-col gap-4">
+            <main className="flex-1 overflow-y-auto sem-scrollbar px-4 pb-[calc(11rem+var(--kb,0px))] pt-[calc(env(safe-area-inset-top)+5rem)] flex flex-col gap-4 lg:mx-auto lg:w-full lg:max-w-[768px]">
               {chatAtivo.mensagens.map((m, i) =>
                 m.autor === 'user' ? (
                   // mensagem do usuário: balão à direita, com copiar + editar/reenviar
@@ -137,20 +146,36 @@ function Home() {
                 ) : (
                   // resposta da IA: textão corrido (sem balão), com **negrito** e
                   // cursor piscando enquanto ainda está sendo escrita.
-                  <div
-                    key={i}
-                    className="animar-subida break-words font-sans text-[15px] leading-relaxed text-white/90"
-                  >
-                    <TextoIA texto={m.texto} />
-                    {escrevendo && i === chatAtivo.mensagens.length - 1 ? (
-                      <span className="cursor-piscando ml-0.5 inline-block">▍</span>
-                    ) : (
-                      // copiar a resposta inteira — só quando já terminou de escrever
-                      <div className="mt-1">
-                        <BotaoCopiar texto={m.texto} titulo="Copiar resposta" />
+                  // extrairAcao tira o marcador [acao: ...] do texto (se houver) e
+                  // devolve o que precisamos pra desenhar o botão no lugar dele.
+                  (() => {
+                    const { texto, acao } = extrairAcao(m.texto)
+                    return (
+                      <div
+                        key={i}
+                        className="animar-subida break-words font-sans text-[15px] leading-relaxed text-white/90"
+                      >
+                        <TextoIA texto={texto} />
+                        {escrevendo && i === chatAtivo.mensagens.length - 1 ? (
+                          <span className="cursor-piscando ml-0.5 inline-block">▍</span>
+                        ) : (
+                          <div className="mt-1 flex items-center gap-2">
+                            <BotaoCopiar texto={texto} titulo="Copiar resposta" />
+                          </div>
+                        )}
+                        {acao && (
+                          <button
+                            type="button"
+                            onClick={() => navigate('/estudar', { state: { tema: acao.tema } })}
+                            className="animar-subida mt-2 flex items-center gap-2 rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-left text-sm font-medium text-white/90 transition-colors hover:bg-white/10"
+                          >
+                            <IconeEstudar />
+                            Montar estudo de "{acao.tema}"
+                          </button>
+                        )}
                       </div>
-                    )}
-                  </div>
+                    )
+                  })()
                 ),
               )}
 
@@ -159,7 +184,7 @@ function Home() {
                   branco, visível no escuro (mesma imagem, só a cor trocada). */}
               {mostrarPensando && (
                 <div className="animar-subida flex items-center gap-2.5 text-white/60">
-                  <img src="/logo-a.png" alt="" className="h-5 w-5 shrink-0 animate-bounce invert" />
+                  <img src="/logo-a.png" alt="" className="h-5 w-5 shrink-0 animate-bounce" />
                   <span className="text-sm">{STATUS[statusIdx]}</span>
                 </div>
               )}
@@ -183,25 +208,23 @@ function Home() {
               O bloco inteiro REAGE ao foco: em repouso fica mais estreito e um
               tiquinho elevado (leveza); ao focar, expande pra largura total e
               desce — transition-all 300ms ease. */}
-          <footer className="absolute bottom-0 inset-x-0 z-20 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 translate-y-[calc(-1*var(--kb,0px))] transition-transform duration-200 ease-out">
+          <footer className="absolute bottom-0 inset-x-0 z-20 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 translate-y-[calc(-1*var(--kb,0px))] transition-transform duration-200 ease-out lg:mx-auto lg:max-w-[768px]">
             <div
               className={`mx-auto flex flex-col gap-3.5 transition-all duration-300 ease-out ${
                 focado ? 'w-full translate-y-0' : 'w-[88%] -translate-y-1.5'
               }`}
             >
-              {/* PÍLULAS FLUTUANTES — soltas, acima do input (totalmente arredondadas) */}
-              <div className="flex gap-2 overflow-x-auto sem-scrollbar px-0.5">
-                <Fluxo label="Estudar" icone="/estudar.png" onClick={() => navigate('/estudar')} />
-                <Fluxo label="Trabalhos" icone="/trabalhos.png" />
-                <Fluxo label="Provas" icone="/provas.png" />
-              </div>
+              {/* ABAS DE FLUXO — soltas, acima do input. Componente compartilhado com
+                  o Estudar (mesma posição + seleção persistente): entrar no Estudar
+                  não parece trocar de lugar, é o mesmo chat com outra direção. */}
+              <AbasFluxo />
 
               {/* INPUT PILL — cartão próprio, totalmente arredondado (rounded-full).
                   items-center = texto de 1 linha fica no meio; botões vão pro fim
                   (self-end) quando o campo cresce. */}
               <div
                 className={`flex items-center gap-2 rounded-[26px] border backdrop-blur-md pl-4 pr-2 py-1.5 transition-colors duration-200 ${
-                  focado ? 'border-white/80 bg-white/20' : 'border-white/50 bg-white/10'
+                  focado ? 'border-white/80 bg-white/10' : 'border-white/50 bg-white/5'
                 }`}
               >
                 <textarea
@@ -223,7 +246,7 @@ function Home() {
                   }}
                   rows={1}
                   placeholder="Quero estudar para a prova de Java..."
-                  className="flex-1 resize-none bg-transparent font-sans text-[17px] leading-6 text-white placeholder:text-white/40 outline-none py-1"
+                  className="flex-1 resize-none bg-transparent font-sans text-[18px] lg:text-[15px] leading-6 text-white placeholder:text-white/40 placeholder:text-[14px] outline-none py-1"
                   style={{ maxHeight: ALTURA_MAX }}
                 />
                 {/* mesmo botão troca de função: pensando -> PARAR (quadrado),
@@ -246,6 +269,15 @@ function Home() {
                   )}
                 </button>
               </div>
+
+              {/* Aviso de falibilidade: só em conversa ativa (não polui a saudação).
+                  Fica abaixo do input; como o footer é ancorado no rodapé, o input
+                  sobe um pouco sozinho pra abrir espaço pra esta linha. */}
+              {chatAtivoId && (
+                <p className="-mt-1.5 px-2 text-center text-[11px] leading-snug text-white/35">
+                  O Astrodny pode errar em fatos e números — confira o que for importante.
+                </p>
+              )}
             </div>
           </footer>
 
@@ -262,14 +294,17 @@ function Home() {
 // então markdown ainda "aberto" no meio da digitação não quebra a tela. O `components`
 // mapeia cada elemento pro visual do tema escuro, já que não usamos plugin de tipografia.
 const componentesMarkdown: Components = {
-  h1: ({ children }) => <h2 className="mt-3 mb-1 text-lg font-bold text-white">{children}</h2>,
-  h2: ({ children }) => <h2 className="mt-3 mb-1 text-base font-bold text-white">{children}</h2>,
-  h3: ({ children }) => <h3 className="mt-2 mb-1 font-semibold text-white">{children}</h3>,
-  p: ({ children }) => <p className="mb-2">{children}</p>,
+  // Hierarquia com respiro: h1 (título principal da resposta) é o maior; h2/h3 descem
+  // de forma equilibrada. mt generoso separa seções; mb afasta o título do parágrafo.
+  // first:mt-0 evita que o 1º título empurre o topo do balão.
+  h1: ({ children }) => <h2 className="mb-2.5 mt-1 text-xl font-bold leading-snug text-white first:mt-0">{children}</h2>,
+  h2: ({ children }) => <h2 className="mb-4 mt-8 text-[19px] font-bold leading-snug text-white first:mt-0">{children}</h2>,
+  h3: ({ children }) => <h3 className="mb-2.5 mt-6 text-base font-semibold text-white first:mt-0">{children}</h3>,
+  p: ({ children }) => <p className="mb-4 leading-relaxed">{children}</p>,
   strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
   em: ({ children }) => <em className="italic">{children}</em>,
-  ul: ({ children }) => <ul className="mb-2 ml-4 list-disc space-y-0.5">{children}</ul>,
-  ol: ({ children }) => <ol className="mb-2 ml-4 list-decimal space-y-0.5">{children}</ol>,
+  ul: ({ children }) => <ul className="mb-3.5 ml-4 list-disc space-y-1">{children}</ul>,
+  ol: ({ children }) => <ol className="mb-3.5 ml-4 list-decimal space-y-1">{children}</ol>,
   li: ({ children }) => <li className="pl-0.5">{children}</li>,
   a: ({ href, children }) => (
     <a href={href} target="_blank" rel="noreferrer" className="text-blue-300 underline">{children}</a>
@@ -292,26 +327,41 @@ const componentesMarkdown: Components = {
         titulo="Copiar código"
         className="absolute right-2 top-2 bg-black/40 backdrop-blur-sm"
       />
-      <pre className="overflow-x-auto rounded-lg bg-black/40 p-3 pt-9 text-[13px]">{children}</pre>
+      <pre className="scroll-chat overflow-x-auto rounded-lg bg-black/40 px-4 py-3 pt-9 text-[13px]">{children}</pre>
     </div>
   ),
+  // Tabela "limpa": container arredondado com borda fina, cabeçalho sombreado e só
+  // DIVISÓRIAS HORIZONTAIS (sem grade vertical pesada). Zebra discreta ajuda a ler
+  // linhas largas. overflow-x-auto deixa rolar no celular sem quebrar o layout.
   table: ({ children }) => (
-    <div className="mb-2 overflow-x-auto">
+    <div className="scroll-chat my-4 overflow-x-auto rounded-xl border border-white/10">
       <table className="w-full border-collapse text-sm">{children}</table>
     </div>
   ),
-  th: ({ children }) => <th className="border border-white/20 px-2 py-1 text-left font-semibold">{children}</th>,
-  td: ({ children }) => <td className="border border-white/15 px-2 py-1">{children}</td>,
-  // citação (>): é onde a IA entrega um "prompt/texto pronto pra colar". Mesmo
-  // tratamento do código — botão de copiar no canto, com espaço à direita pra ele.
+  thead: ({ children }) => <thead className="bg-white/[0.06]">{children}</thead>,
+  // :nth-child é por elemento-pai, então o even: só pega as linhas pares do tbody —
+  // a linha do cabeçalho (sozinha no thead) não é afetada.
+  tr: ({ children }) => <tr className="even:bg-white/[0.02]">{children}</tr>,
+  th: ({ children }) => (
+    <th className="whitespace-nowrap border-b border-white/15 px-4 py-3 text-left font-semibold text-white">{children}</th>
+  ),
+  td: ({ children }) => <td className="border-b border-white/[0.07] px-4 py-3 align-top leading-relaxed">{children}</td>,
+  // citação (>): a IA costuma usar pra ENTREGAR um exemplo / texto pronto pra colar.
+  // Em vez da barra lateral (traço grande) + itálico, vira um QUADRO na mesma linguagem
+  // das tabelas (borda fina, cantos arredondados, fundo sutil) com o exemplo DENTRO.
+  // Botão de copiar no canto; o pr-12 reserva o espaço dele.
   blockquote: ({ children }) => (
-    <div className="relative mb-2">
+    <div className="relative my-4 overflow-hidden rounded-xl border border-white/10 bg-white/[0.03]">
       <BotaoCopiar
         texto={extrairTexto(children)}
         titulo="Copiar texto"
-        className="absolute right-1 top-1"
+        className="absolute right-2 top-2 bg-black/30 backdrop-blur-sm"
       />
-      <blockquote className="border-l-2 border-white/30 pl-3 pr-10 italic text-white/75">{children}</blockquote>
+      {/* neutraliza o mb-4 do <p> interno pra o respiro ficar no padding do quadro:
+          parágrafos internos ganham mb-2, e o último zera. */}
+      <blockquote className="px-4 py-3 pr-12 leading-relaxed text-white/80 [&>p]:mb-2 [&>p:last-child]:mb-0">
+        {children}
+      </blockquote>
     </div>
   ),
 }
@@ -328,6 +378,16 @@ function extrairTexto(node: ReactNode): string {
     return extrairTexto((node as { props: { children?: ReactNode } }).props.children)
   }
   return ''
+}
+
+// Ícone do botão de ação "Montar estudo de X" (livro simples).
+function IconeEstudar() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+      <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15.5a1 1 0 0 1-1 1H6.5A2.5 2.5 0 0 0 4 22Z" />
+      <path d="M4 5.5v14A2.5 2.5 0 0 0 6.5 22" />
+    </svg>
+  )
 }
 
 // Copia um texto pro clipboard de forma CONFIÁVEL em qualquer contexto.
@@ -500,24 +560,13 @@ function MensagemUsuario({ texto, aoSalvar }: { texto: string; aoSalvar: (novo: 
 
 function TextoIA({ texto }: { texto: string }) {
   return (
-    <ReactMarkdown remarkPlugins={[remarkGfm]} components={componentesMarkdown}>
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      rehypePlugins={[[rehypeHighlight, { detect: true, ignoreMissing: true }]]}
+      components={componentesMarkdown}
+    >
       {texto}
     </ReactMarkdown>
-  )
-}
-
-// Botão de FLUXO (Estudar/Trabalhos/Provas): compacto, borda fina, ícone + nome.
-// Vive na barra do composer unificado, sempre visível.
-function Fluxo({ label, icone, onClick }: { label: string; icone: string; onClick?: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="shrink-0 flex items-center gap-1.5 rounded-full border border-white/20 px-3 py-1.5 text-xs font-medium text-white/85 transition-colors active:bg-white/10"
-    >
-      <img src={icone} alt="" className="h-4 w-4 object-contain" />
-      {label}
-    </button>
   )
 }
 

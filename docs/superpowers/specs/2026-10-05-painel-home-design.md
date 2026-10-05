@@ -53,7 +53,7 @@ anônimo), mostra só a explicação genérica, nunca inventa contexto.
   mensagem (equivalente a começar um novo chat digitando).
 - Clicar em "Trabalhos"/"Estudar"/"Provas" → vai direto pro fluxo dedicado
   daquela função (não passa pelo chat).
-- Clicar em "Novo Chat" → abre um chat em branco.
+- Clicar em "Novo Chat" → abre um novo chat.
 - **Os dois caminhos NÃO se misturam** — digitar não redireciona pro atalho
   e vice-versa. A ideia de "funcionam pros dois contextos" significa que,
   conceitualmente, dá pra pedir a mesma coisa tanto conversando (chat) quanto

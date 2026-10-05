@@ -3,8 +3,9 @@
 > Assistente acadêmico (PWA mobile-first) que transforma o material do aluno em
 > estudo guiado, com um chat como central de tudo.
 
-**Status:** Fase 0 concluída (mock). Próxima: Fase 1 (IA real via Ollama).
-**Última atualização:** 2026-09-29
+**Status:** IA real integrada (chat + Estudar + prova). **Serving: 100% NUVEM** (proxy
+serverless Gemini→Groq). Falta o deploy público e o polimento final da UI.
+**Última atualização:** 2026-10-04
 
 ---
 
@@ -54,13 +55,32 @@ domain  ←  application (+ ports)  ←  infrastructure
 
 | Porta (`application/ports`) | Adaptador atual (`infrastructure`) | Troca futura |
 |---|---|---|
-| `AIProvider` (`generate`, `generateStream`) | `mockProvider` | `ollamaProvider` |
+| `AIProvider` (`generate`, `generateStream`) | **PROD:** `proxyProvider` (nuvem) · **DEV:** `ollamaProvider`/diretos | — |
 | `TextExtractor` | `pdfExtractor` (pdf.js legacy) | OCR, .docx… |
 | `ChatRepository` | `localStorageChatRepository` | API/nuvem |
 | `StudyRepository` | `localStorageStudyRepository` | API/nuvem |
 
 **Consequência prática:** trocar mock → IA real, ou localStorage → backend, é trocar
 o adaptador (1 linha `const x = ...`). Domínio, aplicação e telas não mudam.
+
+### 2.1 Serving — 100% NUVEM (decisão definitiva)
+
+**Todo o produto roda em nuvem.** Chat, Estudar (montar aula), prova (estágio 2) e narração
+passam pela nuvem em produção. Não há componente local no runtime do produto — o Ollama local
+é **apenas conveniência de desenvolvimento** (grátis/offline pra codar). O self-host (PC Gamer /
+RTX 3060) foi **descartado**: PC de terceiro e não confiável como servidor.
+
+- **Front:** PWA no **Vercel** (deploy automático do GitHub).
+- **Backend:** **proxy serverless Edge** (`api/generate`, `api/stream`) que **esconde as chaves**
+  e roteia a cadeia **Gemini → Groq** server-side.
+- **Chaveamento por ambiente** (`import.meta.env.PROD`): `PROD → proxyProvider` (tudo pela nuvem);
+  `DEV → Ollama/diretos`. Ver `StudySession.tsx` (`ia`/`iaProva`/`iaNarracao`) e `chats.tsx`.
+- **Dados anônimos** no **Supabase** (`astrocore_dataset`, pares input→output desde o dia 1 —
+  matéria-prima do futuro *Astro Core*).
+- **Custo:** R$ 0 — sustentado pelo **free tier** (Gemini + Groq 120b/8b-instant), folgado para
+  dezenas de usuários ativos. Migrar só com tração/receita.
+- **Fragilidade conhecida:** rate limit **429** em fluxos multi-chamada → tratar com mensagem
+  amigável (degradação graciosa), nunca erro seco.
 
 ### Estrutura de pastas
 ```
@@ -150,7 +170,8 @@ Mensagem → chat(historico, AIProvider) → stream de texto (for await)
 
 - **Frontend:** React 19 + TypeScript + Vite + Tailwind CSS v4.
 - **Extração de PDF:** pdfjs-dist (build legacy).
-- **IA (Fase 1):** Ollama (modelo local via HTTP).
+- **IA:** 100% nuvem via proxy serverless (cadeia **Gemini 3.8 Flash → Groq gpt-oss-120b**;
+  Groq 8b-instant pra tarefas leves). Ollama local só em DEV.
 - **Testes:** Vitest (foco nas funções puras da `application`).
 - **Fonte:** Instrument Sans. **Tema:** escuro.
 

@@ -8,17 +8,20 @@ import App from './App.tsx'
 import { ChatsProvider } from './ui/chats'
 import { StudiesProvider } from './ui/studies'
 import { SettingsProvider } from './ui/settings'
+import { AuthProvider } from './ui/auth'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
-      <SettingsProvider>
-        <ChatsProvider>
-          <StudiesProvider>
-            <App />
-          </StudiesProvider>
-        </ChatsProvider>
-      </SettingsProvider>
+      <AuthProvider>
+        <SettingsProvider>
+          <ChatsProvider>
+            <StudiesProvider>
+              <App />
+            </StudiesProvider>
+          </ChatsProvider>
+        </SettingsProvider>
+      </AuthProvider>
     </BrowserRouter>
   </StrictMode>,
 )

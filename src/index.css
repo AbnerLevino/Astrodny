@@ -89,6 +89,130 @@ button:not(:disabled) {
   background: rgba(255, 255, 255, 0.32);
 }
 
+/* Scroll dos BLOCOS do chat (código, tabelas): quando o conteúdo é mais largo que o
+   balão, ele rola na horizontal.
+   - CELULAR: sem barra visível (mas rola no toque) — barra ocuparia espaço e polui.
+   - DESKTOP (lg+): barra bem FINA e TRANSLÚCIDA, só pra indicar que dá pra rolar.
+   O corte em 1024px acompanha o breakpoint lg que o app usa pra "desktop". */
+.scroll-chat {
+  scrollbar-width: none; /* Firefox: escondida no celular */
+  -ms-overflow-style: none;
+}
+.scroll-chat::-webkit-scrollbar {
+  display: none; /* WebKit: escondida no celular */
+}
+@media (min-width: 1024px) {
+  .scroll-chat {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  }
+  .scroll-chat::-webkit-scrollbar {
+    display: block;
+    width: 6px;
+    height: 6px;
+  }
+  .scroll-chat::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scroll-chat::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+  }
+  .scroll-chat::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+}
+
+/*
+  Realce de sintaxe dos blocos de código do chat (rehype-highlight / highlight.js).
+  Tema PRÓPRIO (escrito à mão) pra casar com o dark + azul + dourado do Astrodny,
+  em vez de importar um tema pronto — mantém tudo self-contained e sem CSS externo.
+  O highlight.js marca cada pedaço com uma classe .hljs-* e a gente só pinta.
+*/
+.hljs {
+  color: rgba(255, 255, 255, 0.9); /* texto base do código */
+}
+/* COMENTÁRIO: cinza com opacidade baixa (e itálico), some pro segundo plano */
+.hljs-comment,
+.hljs-quote {
+  color: rgba(255, 255, 255, 0.32);
+  font-style: italic;
+}
+/* palavras-chave / estrutura da linguagem — azul claro */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-built_in,
+.hljs-literal {
+  color: #7aa2ff;
+}
+/* textos (strings) — verde suave */
+.hljs-string,
+.hljs-regexp,
+.hljs-char,
+.hljs-addition {
+  color: #9ece6a;
+}
+/* números / constantes — laranja */
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet {
+  color: #ff9e64;
+}
+/* nomes de função / seções — azul */
+.hljs-title,
+.hljs-title.function_,
+.hljs-section,
+.hljs-name {
+  color: #82aaff;
+}
+/* tipos / classes — dourado (o acento da marca) */
+.hljs-type,
+.hljs-title.class_,
+.hljs-class .hljs-title {
+  color: #e0af68;
+}
+/* atributos / propriedades — ciano claro */
+.hljs-attr,
+.hljs-attribute,
+.hljs-property,
+.hljs-variable.language_ {
+  color: #7dcfff;
+}
+/* variáveis / tags / parâmetros — rosa suave */
+.hljs-variable,
+.hljs-template-variable,
+.hljs-tag,
+.hljs-params {
+  color: #f7768e;
+}
+/* meta (diretivas, @, #include) e doctag — bem apagado */
+.hljs-meta,
+.hljs-doctag {
+  color: rgba(255, 255, 255, 0.45);
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 600;
+}
+
+/* Placeholder rotativo (campo "Estrutura de chat"): cada frase entra deslizando de
+   baixo + fade, trocando a cada 6s — efeito de "roda". O remount (key) re-dispara. */
+@keyframes placeholder-entra {
+  from {
+    opacity: 0;
+    transform: translateY(9px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animar-placeholder {
+  animation: placeholder-entra 0.45s ease-out;
+}
+
 /* Cursor "digitando" da IA: pisca enquanto ela escreve */
 @keyframes piscar {
   50% {
@@ -149,10 +273,138 @@ button:not(:disabled) {
   }
 }
 
+/* No DESKTOP a aurora se espalha por uma área bem mais larga (o conteúdo ao lado
+   da sidebar), e como as manchas são medidas em vmax (relativo à maior dimensão,
+   = a largura na tela deitada) elas ficam proporcionalmente pequenas e a cor "rala".
+   Aqui elas crescem pra voltar a preencher com intensidade. */
+@media (min-width: 1024px) {
+  .blob {
+    width: 110vmax;
+    height: 110vmax;
+    filter: blur(90px);
+  }
+  /* núcleo mais SÓLIDO: a cor segura até ~22% e só zera em 78% (antes começava a
+     sumir já no 0% e zerava em 70%) => aurora bem mais saturada no desktop.
+     blob-2 também ganha um azul mais claro (#0b1f8f -> #1636c9) pra não "sumir". */
+  .blob-1 {
+    background: radial-gradient(circle, #2a4bff 0%, #2a4bff 22%, transparent 78%);
+  }
+  .blob-2 {
+    background: radial-gradient(circle, #1636c9 0%, #1636c9 22%, transparent 78%);
+  }
+  .blob-3 {
+    background: radial-gradient(circle, #8a5cff 0%, #8a5cff 22%, transparent 78%);
+  }
+}
+
+/*
+  Mini-aurora DENTRO do botão "Evolua seu nível"/"Descubra o Astro!": mesma
+  ideia do .fundo-aurora (blobs orbitando + mix-blend screen sobre base
+  escura), em escala de pílula. O conteúdo (ícone + texto) fica por cima via
+  z-10.
+  NO MOBILE fica sempre aceso (sem hover em touch, perderia o efeito à toa).
+  NO DESKTOP (lg+) só acende com o mouse em cima, como antes.
+*/
+.aurora-btn {
+  position: relative;
+  overflow: hidden;
+}
+.aurora-brilho {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-color: #04061a; /* base escura pra o "screen" brilhar por cima */
+  opacity: 1;
+  transition: opacity 0.35s ease;
+  pointer-events: none;
+}
+@media (min-width: 1024px) {
+  .aurora-brilho {
+    opacity: 0;
+  }
+  .aurora-btn:hover .aurora-brilho {
+    opacity: 1;
+  }
+}
+.aurora-brilho::before,
+.aurora-brilho::after {
+  content: "";
+  position: absolute;
+  width: 150%;
+  height: 450%;
+  border-radius: 50%;
+  filter: blur(14px);
+  mix-blend-mode: screen;
+  will-change: transform;
+}
+.aurora-brilho::before {
+  background: radial-gradient(circle, #2a4bff 0%, transparent 70%);
+  top: -175%;
+  left: -15%;
+  transform-origin: 60% 70%;
+  animation: orbitar 3s linear infinite;
+}
+.aurora-brilho::after {
+  background: radial-gradient(circle, #8a5cff 0%, transparent 70%);
+  bottom: -175%;
+  right: -15%;
+  transform-origin: 40% 30%;
+  animation: orbitar 4s linear infinite reverse;
+}
+
+/*
+  Texto "ele te guia pelas estrelas." no modal Descubra o Astro: o texto vira
+  um degradê nas MESMAS cores da aurora (azul -> roxo -> azul) que desliza
+  continuamente, como se a própria aurora de fundo estivesse passando por
+  dentro das letras.
+*/
+.brilho-aurora {
+  background: linear-gradient(90deg, #2a4bff, #8a5cff, #2a4bff);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: brilhoAurora 5s ease-in-out infinite;
+}
+@keyframes brilhoAurora {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+/*
+  Estrelinhas decorativas do "Descubra o Astro!": piscam sumindo e aparecendo,
+  cada uma com seu próprio ritmo (duração/atraso vêm inline, por estrela) —
+  --brilho-max é o pico de opacidade de CADA estrela (sorteado por ela).
+*/
+.estrela-piscante {
+  opacity: 0;
+  animation-name: piscarEstrela;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+@keyframes piscarEstrela {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: var(--brilho-max, 0.8);
+  }
+}
+
 /* respeita quem pediu menos animação no sistema */
 @media (prefers-reduced-motion: reduce) {
-  .blob {
+  .blob,
+  .aurora-brilho::before,
+  .aurora-brilho::after,
+  .brilho-aurora,
+  .estrela-piscante {
     animation: none;
+    opacity: var(--brilho-max, 0.8);
   }
 }
 

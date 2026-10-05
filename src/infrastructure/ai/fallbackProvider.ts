@@ -9,6 +9,7 @@
   existe fallback; pra ele é só "uma IA".
 */
 import type { AIProvider } from '../../application/ports/AIProvider'
+import { IALimiteError, ehLimite } from '../../application/ports/aiErrors'
 
 export function fallbackProvider(provedores: AIProvider[]): AIProvider {
   if (provedores.length === 0) {
@@ -19,13 +20,18 @@ export function fallbackProvider(provedores: AIProvider[]): AIProvider {
     // Tenta gerar completo em cada provedor, na ordem; usa o primeiro que responder.
     async generate(prompt, opcoes) {
       let ultimoErro: unknown
+      let houveLimite = false
       for (const p of provedores) {
         try {
           return await p.generate(prompt, opcoes)
         } catch (e) {
           ultimoErro = e // tenta o próximo
+          if (ehLimite(e)) houveLimite = true
         }
       }
+      // se a cadeia caiu e PELO MENOS UM elo foi por sobrecarga, trate o todo como LIMITE
+      // (temporário → vale re-tentar/avisar), mesmo que o último erro tenha sido outro.
+      if (houveLimite) throw new IALimiteError()
       throw ultimoErro
     },
 
@@ -34,6 +40,7 @@ export function fallbackProvider(provedores: AIProvider[]): AIProvider {
     // desenhar qualquer coisa na tela. Depois que o texto começou, seguimos com ele.
     async *generateStream(prompt) {
       let ultimoErro: unknown
+      let houveLimite = false
       for (const p of provedores) {
         try {
           const it = p.generateStream(prompt)[Symbol.asyncIterator]()
@@ -46,8 +53,10 @@ export function fallbackProvider(provedores: AIProvider[]): AIProvider {
           }
         } catch (e) {
           ultimoErro = e // provedor indisponível: tenta o próximo da cadeia
+          if (ehLimite(e)) houveLimite = true
         }
       }
+      if (houveLimite) throw new IALimiteError()
       throw ultimoErro
     },
   }

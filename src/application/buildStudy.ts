@@ -20,12 +20,18 @@
   a próxima costuma vir ok.
 */
 import type { AIProvider } from './ports/AIProvider'
-import type { Mode, Formato, Study, Block } from '../domain/study'
+import type { Mode, Formato, Study, Block, EstudoConfig } from '../domain/study'
 import { buildStudyPrompt } from './prompts'
 import { comoObjeto, comoLista, comoTexto, validarPergunta } from './validacao'
+import { IALimiteError, ehLimite } from './ports/aiErrors'
 
 // Quantas vezes pedir à IA antes de desistir (a 1ª + 1 retry).
 const MAX_TENTATIVAS = 2
+
+// Pausa ENTRE as tentativas. Sem ela, a 2ª chamada sai logo após a 1ª (rajada) e,
+// num pico de rate limit, as duas estouram juntas (429). Uma pausa curta dá fôlego.
+const PAUSA_ENTRE_TENTATIVAS_MS = 1200
+const dormir = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
 export async function buildStudy(
   content: string,
@@ -33,8 +39,9 @@ export async function buildStudy(
   formato: Formato,
   ai: AIProvider,
   contexto?: string, // pedido extra do aluno (dificuldades, foco…) — opcional
+  config?: EstudoConfig, // ajustes opt-in (nº de tópicos, código) — opcional
 ): Promise<Study> {
-  const prompt = buildStudyPrompt(content, mode, formato, contexto)
+  const prompt = buildStudyPrompt(content, mode, formato, contexto, config)
 
   let ultimoErro: unknown
   for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
@@ -46,10 +53,14 @@ export async function buildStudy(
     } catch (e) {
       ultimoErro = e
       console.warn(`buildStudy: tentativa ${tentativa}/${MAX_TENTATIVAS} falhou:`, e)
+      // espaça a próxima tentativa (menos na última, que não vai re-tentar)
+      if (tentativa < MAX_TENTATIVAS) await dormir(PAUSA_ENTRE_TENTATIVAS_MS)
     }
   }
 
-  // Esgotou as tentativas: erro amigável (o Analisando captura e mostra ao aluno).
+  // Esgotou as tentativas. Se o motivo foi SOBRECARGA, repassa como limite (mensagem
+  // amigável + é temporário); senão, o erro genérico de "material não deu certo".
+  if (ehLimite(ultimoErro)) throw new IALimiteError()
   throw new Error(
     'A IA não conseguiu montar um estudo válido a partir desse material. Tente de novo ou com outro conteúdo.',
     { cause: ultimoErro },

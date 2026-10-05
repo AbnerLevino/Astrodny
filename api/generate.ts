@@ -11,6 +11,7 @@
 */
 import { cadeiaServidor } from './_lib/chain'
 import { registrarEvento, type TipoEvento } from './_lib/log'
+import { ehLimite } from '../src/application/ports/aiErrors'
 
 export const config = { runtime: 'edge' }
 
@@ -45,6 +46,10 @@ export default async function handler(request: Request): Promise<Response> {
     })
     return json({ text }, 200)
   } catch (e) {
+    // sobrecarga (429/503 na cadeia) → responde 429, pra o cliente mostrar a mensagem amigável
+    if (ehLimite(e)) {
+      return json({ error: 'A IA está sobrecarregada no momento. Tente de novo em instantes.' }, 429)
+    }
     return json({ error: e instanceof Error ? e.message : 'Falha na geração.' }, 502)
   }
 }

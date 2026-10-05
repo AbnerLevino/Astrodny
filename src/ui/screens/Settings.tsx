@@ -29,7 +29,7 @@ function Settings() {
   return (
     <div className="min-h-dvh bg-[#05060f] text-white">
       {/* topo: voltar + título */}
-      <header className="flex items-center gap-3 px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top))]">
+      <header className="flex items-center gap-3 px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top))] lg:mx-auto lg:w-full lg:max-w-[720px]">
         <button
           type="button"
           onClick={() => navigate(-1)}
@@ -43,7 +43,7 @@ function Settings() {
         <h1 className="text-lg font-semibold">Configurações</h1>
       </header>
 
-      <main className="px-5">
+      <main className="px-5 lg:mx-auto lg:max-w-[720px]">
         <section>
           <h2 className="pb-1 text-sm font-medium text-white/90">Personalidade do tutor</h2>
           <p className="pb-4 text-sm text-white/50">

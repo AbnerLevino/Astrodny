@@ -8,8 +8,9 @@
 
   Ao terminar o fluxo, registra o evento anônimo com o texto completo acumulado.
 */
-import { cadeiaServidor } from './_lib/chain'
+import { cadeiaChat } from './_lib/chain'
 import { registrarEvento, type TipoEvento } from './_lib/log'
+import { ehLimite } from '../src/application/ports/aiErrors'
 
 export const config = { runtime: 'edge' }
 
@@ -38,14 +39,16 @@ export default async function handler(request: Request): Promise<Response> {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        for await (const pedaco of cadeiaServidor().generateStream(prompt)) {
+        for await (const pedaco of cadeiaChat().generateStream(prompt)) {
           completo += pedaco
           controller.enqueue(encoder.encode(pedaco))
         }
       } catch (e) {
-        // se falhar ANTES de qualquer texto, sinaliza o erro no próprio fluxo
+        // se falhar ANTES de qualquer texto, sinaliza o erro no próprio fluxo (o cliente
+        // detecta o prefixo e converte no erro certo). "[erro:limite]" = sobrecarga (429/503).
         if (completo === '') {
-          controller.enqueue(encoder.encode('[erro] ' + (e instanceof Error ? e.message : 'falha no stream')))
+          const prefixo = ehLimite(e) ? '[erro:limite] ' : '[erro] '
+          controller.enqueue(encoder.encode(prefixo + (e instanceof Error ? e.message : 'falha no stream')))
         }
       } finally {
         controller.close()

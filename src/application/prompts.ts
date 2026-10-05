@@ -5,10 +5,11 @@
   Pedimos a resposta SEMPRE em JSON, num formato fixo, pra conseguir interpretar
   de volta pra um `Study` — seja o mock ou um modelo real.
 */
-import type { Mode, Formato, QuestionDiscursiva, Study } from '../domain/study'
+import type { Mode, Formato, QuestionDiscursiva, Study, EstudoConfig } from '../domain/study'
 import type { Personalidade } from '../domain/settings'
 import type { Mensagem } from '../domain/chat'
 import type { ContextoEstudo } from '../domain/studyChat'
+import type { Perfil } from '../domain/perfil'
 
 // A "instrução de sistema" do CHAT: define quem o tutor é. O método é o mesmo nos
 // dois (ensinar em porções, checar entendimento); muda só o TOM.
@@ -56,6 +57,16 @@ corrigir se entendeu errado.
   dele (esse fluxo acontece fora do chat).
 Ofereça o botão só quando fizer sentido — nunca empurre.
 
+# Oferecer o botão de Estudar (ação no chat)
+Quando perceber que o aluno quer MESMO estudar um assunto a sério (não uma dúvida
+pontual), pergunte em UMA linha curta se ele quer que você monte um estudo guiado
+daquilo. SÓ depois de perguntar, na mesma resposta, emita ao final o marcador EXATO
+(sem nada a mais na linha): [acao: abrir_estudar | tema: <o assunto, curto>]
+Esse marcador é invisível pro aluno (a tela troca por um botão) — por isso NUNCA
+descreva o marcador nem diga "vou colocar um botão": só escreva a pergunta e o
+marcador. NÃO emita o marcador se o aluno já respondeu que não quer, nem em
+dúvidas rápidas/pontuais — só quando genuinamente for um estudo novo.
+
 # Varie a forma
 Mesmo que a pergunta se repita, NÃO use sempre o mesmo molde: alterne entre tópicos, texto
 conversado, passo a passo, resposta curta — o que combinar. A substância é constante (útil,
@@ -66,27 +77,57 @@ Use markdown à vontade: **negrito** nos pontos-chave, títulos (##), listas, se
 tabelas e blocos de código (\`\`\`) quando ajudarem. Equilíbrio — formatação demais cansa.
 
 # Regras duras
-- Seja PRECISO e honesto. Se não souber, diga que não sabe — nunca invente fatos, fórmulas
-  ou referências.
+- NUNCA invente dados: números, porcentagens, estatísticas, notas de corte, datas, nomes de
+  fontes, links ou "segundo levantamentos/relatórios". Se você não TEM certeza de um número,
+  não o apresente como fato — diga que não tem o dado exato. Confiança bem-escrita NÃO é fonte.
+- Quando o dado for OFICIAL (ENEM, editais, regras de curso/universidade) ou você não souber,
+  APONTE a fonte confiável PELO NOME e diga onde buscar — ex.: "consulte o edital no site do
+  INEP (gov.br/inep)", "veja a Matriz de Referência do ENEM". NUNCA invente a URL exata, o
+  número da página nem a estatística: indicar ONDE ir é profissional; fabricar o detalhe não é.
+- Pode EXPLICAR conceitos à vontade (como a TRI funciona, o que é cada competência). O limite
+  é só NÚMERO específico que você não pode garantir. Atenção: a nota da TRI NÃO é porcentagem
+  linear de acertos — não diga "acertar X% = tantos pontos".
+- "Não tenho o dado exato, confira na fonte oficial" é uma resposta VÁLIDA e profissional.
 - Responda SEMPRE em português.
 - NÃO prometa recursos que o app não tem (corrigir trabalhos, aplicar provas fora do ESTUDAR).`
 
 // A "instrução de sistema" do CHAT: o contexto do produto (fixo) + o TOM escolhido
 // pelo usuário nas Configurações. O método é o mesmo nos dois; muda só o jeito de falar.
-export function systemPromptTutor(personalidade: Personalidade): string {
-  if (personalidade === 'descontraido') {
-    return `${CONTEXTO_ASTRODNY}
+export function systemPromptTutor(personalidade: Personalidade, perfil?: Perfil): string {
+  const base =
+    personalidade === 'descontraido'
+      ? `${CONTEXTO_ASTRODNY}
 
 # Seu tom
 Fale de forma leve, próxima e encorajadora, como um parceiro de estudos que manja do
 assunto. Use uma linguagem informal e amigável, traga exemplos do dia a dia e incentive
 o aluno. Evite formalidade excessiva e "juridiquês".`
-  }
-  return `${CONTEXTO_ASTRODNY}
+      : `${CONTEXTO_ASTRODNY}
 
 # Seu tom
 Responda de forma objetiva, formal e concisa. Vá direto ao ponto, use a terminologia
 técnica correta e evite rodeios. Mantenha um tom profissional, sem gírias.`
+
+  if (!perfil) return base
+
+  const linhasPerfil = [`- Nome: ${perfil.nome}`]
+  if (perfil.curso) linhasPerfil.push(`- Curso: ${perfil.curso}`)
+  if (perfil.nivel) linhasPerfil.push(`- Nível: ${perfil.nivel}`)
+  if (perfil.materias?.length) linhasPerfil.push(`- Matérias/assuntos que está estudando agora: ${perfil.materias.join(', ')}`)
+
+  return `${base}
+
+# Quem é o aluno
+${linhasPerfil.join('\n')}
+
+# Como usar isso
+Infira o assunto da mensagem + este perfil e responda DIRETO — NÃO pergunte o curso de
+novo, nem peça pra ele se identificar antes de responder. Ligue a resposta ao curso do
+aluno SÓ quando a própria mensagem sinalizar isso (ex.: "quando eu for programar" → é
+programação). Se a mensagem for geral ou ambígua, responda no sentido mais comum, sem
+forçar o curso do aluno. Quando a mensagem casar com uma das matérias listadas (ex.:
+"herança" e ele tem "Estrutura de Dados"/Java na lista), USE essa matéria pra dar o
+exemplo certo, sem perguntar qual matéria é.`
 }
 
 export function buildStudyPrompt(
@@ -94,6 +135,7 @@ export function buildStudyPrompt(
   mode: Mode,
   formato: Formato,
   contexto?: string,
+  config?: EstudoConfig,
 ): string {
   // PROFUNDIDADE do ensino — ramifica de verdade pelo modo, com exigência CONCRETA
   // (um modelo pequeno obedece o concreto e ignora pedidos vagos tipo "mais detalhes").
@@ -102,33 +144,65 @@ export function buildStudyPrompt(
       ? 'PROFUNDIDADE: cada bloco deve ter de 2 a 5 parágrafos — direto ao ponto, o essencial do tópico.'
       : 'PROFUNDIDADE: cada bloco deve ter de 4 a 7 parágrafos DENSOS — comece pela definição, explique o PORQUÊ, traga um exemplo concreto e cubra as nuances importantes do tópico. NÃO resuma: este é o modo aprofundado.'
 
+  // Nº de tópicos: explícito (o aluno escolheu no "Ajustes") ou AUTOMÁTICO (a IA decide).
+  const nTop = config?.numTopicos
+  const topicos =
+    nTop && nTop > 0
+      ? `Monte EXATAMENTE ${nTop} tópicos (um bloco por tópico).`
+      : 'Monte de 3 a 6 tópicos, conforme o que o material comporta — nem mais, nem menos.'
+
+  // EXEMPLOS são PADRÃO: todo tópico ganha ao menos um exemplo concreto (pega-se a ideia).
+  const exemplos =
+    'Em CADA tópico, inclua pelo menos UM exemplo concreto (um caso, número ou situação real) que ajude o aluno a entender a ideia.'
+
+  // CÓDIGO + prática: só quando o aluno liga o controle (matérias técnicas/programação).
+  const codigo = config?.incluirCodigo
+    ? ' Quando o assunto permitir, inclua TRECHOS DE CÓDIGO e a APLICAÇÃO PRÁTICA do conceito (um passo a passo ou caso de uso real).'
+    : ''
+  // Regra de FORMATAÇÃO de código (vale SEMPRE): código vai em bloco markdown próprio,
+  // como um ITEM SEPARADO do "conteudo" — nunca embutido no meio de um parágrafo (senão
+  // a aula exibe o código espremido numa linha só).
+  const regraCodigo =
+    ' Se incluir QUALQUER código, coloque-o como um ITEM SEPARADO do array "conteudo", cercado por crases triplas com a linguagem (ex.: ```java\\n...\\n```), e NUNCA no meio de um parágrafo de texto.'
+
   const temMaterial = content.trim().length > 0
   const pedido = contexto?.trim() ?? ''
 
-  // Com material: o PDF é a fonte; o pedido do aluno só prioriza/complementa.
-  // Sem material: o estudo é montado SOBRE o que o aluno pediu, com o conhecimento
-  // do próprio modelo — é o "estudar sem PDF" (o chat com direção).
+  // Com material: o PDF é a fonte; o pedido do aluno enriquece. Sem material: o estudo
+  // é montado SOBRE o que o aluno pediu, com o conhecimento do próprio modelo.
   const fonte = temMaterial
     ? `A partir do CONTEÚDO (material do aluno) abaixo, monte um estudo guiado,
 dividido em blocos por tópico.`
     : `Monte um estudo guiado, dividido em blocos por tópico, SOBRE o tema/pedido do
 aluno abaixo — use o seu próprio conhecimento, sendo didático e correto.`
 
+  // ENRIQUECIMENTO (não filtro): o pedido do aluno TEMPERA o estudo sem estreitá-lo.
+  // (Era aqui que o "priorize" fazia o modelo pequeno estudar SÓ o pedido e ignorar o resto.)
   const foco =
     temMaterial && pedido
-      ? `\nO ALUNO PEDIU ATENÇÃO ESPECIAL A ISTO — priorize ao montar os blocos e as
-perguntas (aprofunde, traga exemplos ou reforce onde ele indicou):
-"${pedido}"\n`
+      ? `\nO ALUNO PEDIU ISTO — trate como ENRIQUECIMENTO, NUNCA como filtro:
+"${pedido}"
+Cubra TODO o material nos tópicos normalmente; onde o que ele pediu aparecer, aprofunde e
+traga mais exemplos; e, se fizer sentido, DEDIQUE um tópico a isso. Mas NÃO reduza nem
+ignore o resto do material por causa desse pedido.\n`
       : ''
 
   const material = temMaterial ? `CONTEÚDO:\n${content}` : `TEMA / PEDIDO DO ALUNO:\n${pedido}`
+
+  // ANCORAGEM ao material (Opção B — comportamento fixo): o material é a fonte PRINCIPAL;
+  // a IA pode enriquecer com conhecimento próprio, mas SINALIZANDO o que é complementar.
+  // Só se aplica quando HÁ material (sem PDF, o estudo já vem do conhecimento do modelo).
+  const ancoragem = !temMaterial
+    ? ''
+    : '\nANCORAGEM: baseie o ensino e as PERGUNTAS no material fornecido — ele é a fonte PRINCIPAL. Você PODE enriquecer com conhecimento próprio quando ajudar o aluno a entender melhor, mas SINALIZE claramente o que não está no material (ex.: inicie a frase com "Complemento:" ou "Além do material:"). Nas perguntas, cobre PRIORITARIAMENTE o que está no material; não exija o que foi apenas complemento.'
 
   // DISCURSIVO: perguntas abertas + gabarito-modelo (respostaEsperada) + pontos-chave.
   // O `tipo` de cada pergunta NÃO é pedido ao modelo — o validador o carimba a partir
   // do formato. Aqui só pedimos os campos de conteúdo.
   if (formato === 'discursivo') {
     return `Você é um professor particular de ensino superior. ${fonte} ${depth}
-Monte NO MÁXIMO 4 blocos. Para cada bloco, escreva o ensino RESPEITANDO A PROFUNDIDADE acima e crie
+${topicos} ${exemplos}${codigo}${regraCodigo}${ancoragem}
+Para cada bloco, escreva o ensino RESPEITANDO A PROFUNDIDADE acima e crie
 1 PERGUNTA ABERTA (dissertativa, que exija o aluno EXPLICAR com as próprias palavras — NADA de
 alternativas). Para cada pergunta, gere a RESPOSTA ESPERADA (concisa: 2 a 4 frases) e de 3 a 5
 PONTOS-CHAVE curtos. (A prova final é montada à parte.)
@@ -158,6 +232,7 @@ ${material}`
 
   // MÚLTIPLA ESCOLHA: comportamento original (alternativas + índice da correta).
   return `Você é um professor particular. ${fonte} ${depth}
+${topicos} ${exemplos}${codigo}${regraCodigo}${ancoragem}
 Para cada bloco, escreva o ensino RESPEITANDO A PROFUNDIDADE acima e faça 1 pergunta de
 alternativas pra fixar. (A prova final é montada à parte.)
 
@@ -225,6 +300,22 @@ AULA:
 ${aula}`
 }
 
+// Frase da "Estrutura de chat" (mostrada no painel de resumo do loading): a ÚNICA parte
+// do painel que usa IA. Uma frase curta e calorosa dizendo como contemplamos o foco/
+// dificuldade que o aluno pediu. O resto do painel (tópicos, perguntas, prova) vem de
+// DADOS na UI, sem IA. Input e output minúsculos = tokens desprezíveis (roda no 8b-instant).
+export function narrarEstudoPrompt(
+  estudo: Study,
+  contexto: string,
+  personalidade: Personalidade,
+): string {
+  const tom = personalidade === 'descontraido' ? 'leve e próximo' : 'objetivo e profissional'
+
+  return `Você é o Astrodny, tutor acadêmico. Acabei de montar o estudo "${estudo.nome}" para o aluno.
+Ao montar, o aluno pediu este foco/dificuldade: "${contexto.trim()}".
+Escreva UMA frase curta (no máximo ~22 palavras), em 1ª pessoa do plural ("Levamos em conta…"), tom ${tom}, dizendo de forma acolhedora e concreta COMO você contemplou esse pedido no estudo. Sem markdown, sem aspas, sem saudação — devolva SÓ a frase.`
+}
+
 // Prompt da CORREÇÃO discursiva — o "professor exigente" que validamos no teste
 // (7B e Groq concordaram com ele). Corrige a resposta escrita COMPARANDO com o
 // gabarito-modelo + os pontos-chave + o conteúdo do bloco. Pede JSON pra parsear.
@@ -233,15 +324,30 @@ export function montarPromptCorrecao(
   conteudoBloco: string[],
   respostaAluno: string,
 ): string {
-  return `Você é um professor universitário EXIGENTE corrigindo uma resposta DISSERTATIVA de prova. Avalie o quanto a resposta do aluno está correta, comparando com a RESPOSTA ESPERADA, os PONTOS-CHAVE e o CONTEÚDO ensinado.
-SEJA RIGOROSO: NÃO dê nota de aprovação (>= 60) para respostas vagas, genéricas ou superficiais, mesmo que apontem na direção certa. Uma resposta só passa se demonstrar DOMÍNIO real — precisão conceitual e os pontos-chave do conteúdo. "Programar" NÃO é o mesmo que a disciplina da área: exija a diferença. Mas NÃO penalize uma resposta correta só por usar palavras diferentes: avalie o conteúdo, não a forma.
+  const n = pergunta.pontosChave.length
+  const porPonto = n > 0 ? Math.round(100 / n) : 100
+  const pontos = pergunta.pontosChave.map((p, i) => `${i + 1}. ${p}`).join('\n')
+
+  // Nota ANCORADA (não "no olho"): a correção acontece em duas etapas — primeiro um
+  // CHECKLIST (cada ponto-chave foi coberto?), depois a nota derivada dessa cobertura,
+  // com uma régua explícita. Isso deixa a nota reproduzível e explicável (e devolve os
+  // pontos que faltaram, pra mostrar ao aluno).
+  return `Você é um professor universitário EXIGENTE corrigindo uma resposta DISSERTATIVA. Corrija de forma ANCORADA, em duas etapas:
+
+ETAPA 1 — CHECKLIST: para CADA ponto-chave abaixo, decida se a resposta do aluno o cobriu de forma CORRETA e suficiente (tangenciar ou citar vagamente NÃO conta como coberto).
+ETAPA 2 — NOTA ANCORADA (0 a 100): derive a nota da PROPORÇÃO de pontos-chave cobertos (há ${n} ponto(s); cada um vale ~${porPonto}), aplicando estes ajustes:
+- Erro CONCEITUAL central (afirmar algo ERRADO sobre a ideia principal) limita a nota a no máximo 55, mesmo que partes estejam certas.
+- Resposta vaga, genérica ou superficial NÃO passa (< 60), mesmo apontando na direção certa.
+- NÃO penalize palavras diferentes: avalie o CONTEÚDO, não a forma. "Programar" NÃO é o mesmo que a disciplina da área — exija a distinção quando couber.
+Em "pontosFaltantes", liste os pontos-chave que NÃO foram cobertos (ou vieram errados), copiando o texto do ponto.
 
 Responda SOMENTE com um JSON neste formato exato (sem texto fora do JSON):
-{ "nota": <inteiro 0 a 100>, "acertou": <true se nota >= 60, senão false>, "porque": "<1-2 frases: por que essa nota, o que faltou ou errou>", "melhoria": "<1 sugestão concreta pra melhorar>" }
+{ "nota": <inteiro 0 a 100>, "acertou": <true se nota >= 60, senão false>, "pontosFaltantes": ["<ponto-chave que faltou>", "..."], "porque": "<1-2 frases: por que essa nota>", "melhoria": "<1 sugestão concreta pra melhorar>" }
 
 PERGUNTA: ${pergunta.enunciado}
 RESPOSTA ESPERADA: ${pergunta.respostaEsperada}
-PONTOS-CHAVE: ${pergunta.pontosChave.join('; ')}
+PONTOS-CHAVE:
+${pontos}
 CONTEÚDO ENSINADO: ${conteudoBloco.join('\n')}
 RESPOSTA DO ALUNO: ${respostaAluno}`
 }
