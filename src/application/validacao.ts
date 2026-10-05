@@ -91,3 +91,10 @@ export function validarProvaQuestion(
   if (blocoIndex < 0 || blocoIndex >= totalBlocos) blocoIndex = 0
   return { ...base, blocoIndex }
 }
+
+// Igual ao comoTexto, mas NÃO lança: ausente/inválido vira null. Usado nas
+// sugestões do Painel, onde "sem sinal" é um resultado VÁLIDO (não um erro) —
+// ver application/homeInsights.ts.
+export function comoTextoOuNull(v: unknown): string | null {
+  return typeof v === 'string' && v.trim() !== '' ? v : null
+}

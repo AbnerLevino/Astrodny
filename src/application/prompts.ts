@@ -5,7 +5,7 @@
   Pedimos a resposta SEMPRE em JSON, num formato fixo, pra conseguir interpretar
   de volta pra um `Study` — seja o mock ou um modelo real.
 */
-import type { Mode, Formato, QuestionDiscursiva, Study, EstudoConfig } from '../domain/study'
+import type { Mode, Formato, QuestionDiscursiva, Study, EstudoConfig, StudySalvo } from '../domain/study'
 import type { Personalidade } from '../domain/settings'
 import type { Mensagem } from '../domain/chat'
 import type { ContextoEstudo } from '../domain/studyChat'
@@ -415,4 +415,67 @@ ${descreverContexto(contexto)}
 # Conversa
 ${conversa}
 Assistente:`
+}
+
+// O prompt do motor de insight do Painel: recebe o que já sabemos do aluno
+// (perfil + estudos + temas recentes de chat) e pede, em JSON, títulos
+// variados pro topo da tela + 1 sugestão por atalho (ou null, quando não há
+// sinal — a regra dura no fim é o que impede a IA de inventar contexto).
+export function montarPromptPainel(
+  perfil: Perfil | null,
+  estudos: StudySalvo[],
+  mensagensAbertura: string[],
+): string {
+  const linhas: string[] = []
+  linhas.push('Você é o motor de sugestões da tela inicial do Astrodny (o Painel).')
+  linhas.push(
+    'Gere, em JSON, títulos e sugestões curtas e naturais pra convidar o aluno a agir — ' +
+      'NUNCA invente atividade, curso, matéria ou prova que não esteja nos dados abaixo.',
+  )
+
+  linhas.push('')
+  linhas.push('# Perfil do aluno')
+  if (perfil?.curso) linhas.push(`Curso: ${perfil.curso}`)
+  if (perfil?.nivel) linhas.push(`Nível: ${perfil.nivel}`)
+  if (perfil?.materias?.length) linhas.push(`Matérias: ${perfil.materias.join(', ')}`)
+  if (!perfil?.curso && !perfil?.nivel && !perfil?.materias?.length) {
+    linhas.push('(sem dado de perfil ainda)')
+  }
+
+  linhas.push('')
+  linhas.push('# Estudos recentes (nome: acertos/total, data)')
+  if (estudos.length === 0) {
+    linhas.push('(nenhum estudo feito ainda)')
+  } else {
+    estudos
+      .slice(0, 10)
+      .forEach((e) => linhas.push(`- ${e.estudo.nome}: ${e.resultado.acertos}/${e.resultado.total}, em ${e.data}`))
+  }
+
+  linhas.push('')
+  linhas.push('# Temas recentes no chat (só a 1ª mensagem de cada conversa nova)')
+  if (mensagensAbertura.length === 0) {
+    linhas.push('(nenhuma conversa nova recente)')
+  } else {
+    mensagensAbertura.forEach((m) => linhas.push(`- "${m}"`))
+  }
+
+  linhas.push('')
+  linhas.push('# O que devolver (só o JSON, sem texto fora dele)')
+  linhas.push(`{
+  "titulos": ["2 a 3 variações curtas de título/pergunta pro topo da tela, tom convidativo"],
+  "sugestoes": {
+    "novoChat": "1 frase sugerindo um tema de conversa, OU null se não houver sinal",
+    "estudar": "1 frase sugerindo o que estudar, OU null se não houver sinal",
+    "trabalhos": "1 frase sugerindo um trabalho (ex.: ABNT), OU null se não houver sinal",
+    "provas": "1 frase sugerindo treinar pra uma prova ou concurso, OU null se não houver sinal"
+  }
+}`)
+  linhas.push('')
+  linhas.push(
+    'Regra dura: sem sinal suficiente pra algum campo, devolva null nele — NÃO force uma ' +
+      'sugestão genérica só pra preencher.',
+  )
+
+  return linhas.join('\n')
 }
