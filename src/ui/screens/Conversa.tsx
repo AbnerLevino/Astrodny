@@ -1,12 +1,14 @@
 /*
-  Tela principal (Home) — é TAMBÉM onde a conversa acontece, na MESMA tela.
-  - Sem conversa ativa: mostra a saudação (+ chips + campo).
+  Conversa — onde o chat acontece (rotas /chat e /chat/:id). Já foi a tela
+  inicial do app ("Home"); agora quem recebe primeiro é o Painel ("/"), que
+  leva pra cá ao clicar em "Novo Chat"/um atalho ou digitar na caixa de lá.
+  - Sem conversa ativa (/chat, sem id): mostra a saudação (+ chips + campo).
   - Ao enviar: vira um chat novo (entra no histórico) e as mensagens aparecem
     AQUI MESMO, no lugar da saudação. Nada de tela separada.
   Tocar na foto de perfil abre o menu lateral (Sidebar).
 */
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import { AbasFluxo } from '../abas'
 import { useChats } from '../chats'
@@ -27,8 +29,10 @@ function saudacao(): string {
   return 'Boa noite'
 }
 
-function Home() {
+function Conversa() {
   const navigate = useNavigate()
+  // :id da rota /chat/:id — ausente em /chat (chat em branco, mostra a saudação)
+  const { id } = useParams<{ id: string }>()
   const [menuAberto, setMenuAberto] = useState(false)
   // true enquanto o mouse está sobre o CTA "Descubra o Astro!" (visitante, sem
   // login) na Sidebar — revela a aurora de fundo por baixo do véu escuro.
@@ -38,7 +42,14 @@ function Home() {
   const [statusIdx, setStatusIdx] = useState(0)
   const areaRef = useRef<HTMLTextAreaElement>(null)
   const fimRef = useRef<HTMLDivElement>(null)
-  const { criarChat, enviarMensagem, editarMensagem, pararResposta, obterChat, chatAtivoId, pensandoId } = useChats()
+  const { criarChat, enviarMensagem, editarMensagem, pararResposta, obterChat, chatAtivoId, setChatAtivo, pensandoId } =
+    useChats()
+
+  // sincroniza o chat ativo com a URL: /chat/:id abre aquele chat, /chat (sem
+  // id) volta pra saudação. A URL é quem manda — a Sidebar só navega (Task 7).
+  useEffect(() => {
+    setChatAtivo(id ?? null)
+  }, [id, setChatAtivo])
 
   const chatAtivo = chatAtivoId ? obterChat(chatAtivoId) : undefined
 
@@ -68,8 +79,11 @@ function Home() {
   function enviar() {
     const limpo = texto.trim()
     if (!limpo) return
-    if (chatAtivoId) enviarMensagem(chatAtivoId, limpo) // continua o chat aberto
-    else criarChat(limpo) // primeira mensagem: cria chat novo (já vira o ativo)
+    if (chatAtivoId) {
+      enviarMensagem(chatAtivoId, limpo) // continua o chat aberto
+    } else {
+      navigate(`/chat/${criarChat(limpo)}`) // 1ª mensagem: cria o chat e reflete o id na URL
+    }
     setTexto('')
     // no celular, some o teclado ao enviar (a mensagem entra e a tela volta ao normal)
     if (window.matchMedia('(pointer: coarse)').matches) areaRef.current?.blur()
@@ -570,4 +584,4 @@ function TextoIA({ texto }: { texto: string }) {
   )
 }
 
-export default Home
+export default Conversa
