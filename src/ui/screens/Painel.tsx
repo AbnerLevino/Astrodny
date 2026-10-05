@@ -209,15 +209,6 @@ function Painel() {
           }`}
         />
 
-        {/* header mobile: avatar abre o drawer da Sidebar (no desktop ela já
-            some de vez — sem header, ver Sidebar escondidoNoDesktop) */}
-        <header className="absolute top-0 inset-x-0 z-20 flex items-center justify-between px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-2 lg:hidden">
-          <button type="button" aria-label="Abrir menu" onClick={() => setMenuAberto(true)} className="shrink-0">
-            <img src="/perfil.png" alt="Foto de perfil" className="h-12 w-12 rounded-full object-cover border-2 border-white" />
-          </button>
-          <img src="/logo.png" alt="Astrodny" className="h-9 w-auto" />
-        </header>
-
         <main className="relative z-10 flex min-h-dvh flex-col justify-center gap-8 px-6 pt-24 pb-10 text-white lg:flex-row lg:items-center lg:gap-16 lg:px-16">
           {/* título + campo de chat — sobe um pouco em relação ao centro */}
           <div className="flex -translate-y-10 flex-col lg:-translate-y-16 lg:flex-1 lg:max-w-xl">
