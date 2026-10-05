@@ -226,7 +226,7 @@ function Painel() {
 
             <div
               className={`mt-6 flex items-center gap-2 self-center rounded-[26px] border border-white/50 bg-white/5 pl-4 pr-2 py-1.5 backdrop-blur-md transition-all duration-300 ease-out ${
-                focado ? 'w-full' : 'w-[75%]'
+                focado ? 'w-full' : 'w-[85%]'
               }`}
             >
               <input
