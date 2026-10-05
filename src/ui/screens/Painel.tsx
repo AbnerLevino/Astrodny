@@ -1,16 +1,18 @@
 /*
   Painel — tela inicial do app ("/"). Convida o aluno a agir: título +
-  campo de chat (digitar = cria um chat novo, igual ao atalho "Novo Chat") +
-  4 atalhos pras áreas do app (Novo Chat, Estudar, Trabalhos, Provas).
+  campo de chat (digitar = cria um chat novo — esse É o "Novo Chat", não
+  existe atalho separado pra isso) + os atalhos "O que você precisa?"
+  (Estudar, Trabalhos, Provas), abaixo do campo.
 
-  Nesta primeira versão os 4 atalhos mostram nome + explicação FIXOS (sem
-  personalização ainda — isso entra na task seguinte, que liga o motor de
-  insight). Trabalhos e Provas ainda não têm funcionalidade: clicar neles
-  abre um aviso "em breve" com o que está planejado.
+  Nesta versão os atalhos mostram nome + explicação FIXOS pra quem não tem
+  sugestão personalizada ainda. Trabalhos e Provas ainda não têm
+  funcionalidade: clicar neles abre um aviso "em breve" com o que está
+  planejado.
 
   Sidebar: no DESKTOP fica escondida aqui (tela cheia, sem coluna lateral) —
   só reaparece ao entrar numa área de trabalho (Chat/Estudar). No MOBILE
-  continua sendo o drawer de sempre (avatar no topo abre).
+  também fica escondida por enquanto (sem botão pra abrir o drawer a partir
+  do Painel — só ao entrar em Chat/Estudar).
 */
 import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -45,7 +47,7 @@ const ia = retryProvider(
       ]),
 )
 
-type ChaveAtalho = 'novoChat' | 'estudar' | 'trabalhos' | 'provas'
+type ChaveAtalho = 'estudar' | 'trabalhos' | 'provas'
 
 type Atalho = {
   chave: ChaveAtalho
@@ -55,12 +57,6 @@ type Atalho = {
 }
 
 const ATALHOS: Atalho[] = [
-  {
-    chave: 'novoChat',
-    nome: 'Novo Chat',
-    explicacao: 'Converse com o Astrodny sobre qualquer matéria, dúvida ou ideia.',
-    icone: <IconeChatAtalho />,
-  },
   {
     chave: 'estudar',
     nome: 'Estudar',
@@ -184,8 +180,7 @@ function Painel() {
   }
 
   function clicarAtalho(chave: ChaveAtalho) {
-    if (chave === 'novoChat') navigate('/chat')
-    else if (chave === 'estudar') navigate('/estudar')
+    if (chave === 'estudar') navigate('/estudar')
     else setEmBreve(chave)
   }
 
@@ -209,9 +204,9 @@ function Painel() {
           }`}
         />
 
-        <main className="relative z-10 flex min-h-dvh flex-col justify-center gap-1 px-6 pt-24 pb-10 text-white lg:flex-row lg:items-center lg:gap-16 lg:px-16">
-          {/* título + campo de chat — sobe um pouco em relação ao centro */}
-          <div className="flex -translate-y-10 flex-col lg:-translate-y-16 lg:flex-1 lg:max-w-xl">
+        <main className="relative z-10 flex min-h-dvh flex-col items-center justify-center gap-6 px-6 pt-24 pb-10 text-white lg:px-16">
+          {/* título + campo de chat */}
+          <div className="flex w-full max-w-xl flex-col">
             {/* marca do Astrodny — só a logo, acima de tudo */}
             <img src="/logo.png" alt="Astrodny" className="mb-8 h-20 w-auto -translate-y-4 self-center lg:translate-y-0" />
             <p className="text-xl text-white/80">{saudacao()}, Universitário!</p>
@@ -256,8 +251,9 @@ function Painel() {
             </div>
           </div>
 
-          {/* os 4 atalhos */}
-          <div className="flex flex-col gap-3 lg:w-[22rem] lg:shrink-0">
+          {/* os atalhos — abaixo do campo de chat, com subtítulo */}
+          <div className="flex w-full max-w-xl flex-col gap-3">
+            <p className="text-sm font-semibold uppercase tracking-wide text-white/50">O que você precisa?</p>
             {ATALHOS.map((a) => {
               const sugestao = insights?.sugestoes[a.chave]
               return (
@@ -309,14 +305,6 @@ function ModalEmBreve({ titulo, descricao, aoFechar }: { titulo: string; descric
         </button>
       </div>
     </div>
-  )
-}
-
-function IconeChatAtalho() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 11.5a8.4 8.4 0 0 1-12.1 7.6L3 21l1.9-5.9A8.4 8.4 0 1 1 21 11.5z" />
-    </svg>
   )
 }
 
