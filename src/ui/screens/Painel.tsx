@@ -271,12 +271,12 @@ function Painel() {
                   key={a.chave}
                   type="button"
                   onClick={() => clicarAtalho(a.chave)}
-                  className="flex items-start gap-3 rounded-xl border border-black/15 bg-white px-4 py-3.5 text-left text-black shadow-sm transition-transform hover:scale-[1.01]"
+                  className="flex items-start gap-3 rounded-xl border border-white/50 bg-white/15 px-4 py-3.5 text-left text-white backdrop-blur-md transition-transform hover:scale-[1.01]"
                 >
-                  <span className="mt-0.5 shrink-0 text-[#0a1560] [&>svg]:h-5 [&>svg]:w-5">{a.icone}</span>
+                  <span className="mt-0.5 shrink-0 text-white [&>svg]:h-5 [&>svg]:w-5">{a.icone}</span>
                   <span>
                     <span className="block text-[15px] font-semibold">{a.nome}</span>
-                    <span className="block text-[13px] leading-snug text-black/60">{sugestao ?? a.explicacao}</span>
+                    <span className="block text-[13px] leading-snug text-white/65">{sugestao ?? a.explicacao}</span>
                   </span>
                 </button>
               )
