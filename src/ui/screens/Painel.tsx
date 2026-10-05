@@ -221,10 +221,11 @@ function Painel() {
         <main className="relative z-10 flex min-h-dvh flex-col justify-center gap-8 px-6 pt-24 pb-10 text-white lg:flex-row lg:items-center lg:gap-16 lg:px-16">
           {/* título + campo de chat */}
           <div className="flex flex-col lg:flex-1 lg:max-w-xl">
-            {/* marca do Astrodny — "A" da logo, grande, acima de tudo.
-                invert: o PNG é preto sobre fundo transparente; invertido fica
-                branco, visível no fundo escuro do Painel. */}
-            <img src="/logo-a.png" alt="" className="mb-4 h-14 w-14 invert" />
+            {/* marca do Astrodny — "A" da logo + o nome por extenso, acima de tudo */}
+            <div className="mb-4 flex items-center gap-3">
+              <img src="/logo.png" alt="" className="h-12 w-auto" />
+              <span className="text-2xl font-bold tracking-tight">Astrodny</span>
+            </div>
             <p className="text-xl text-white/80">{saudacao()}, Universitário!</p>
             <h1 key={tituloIdx} className="animar-subida mt-1 text-[28px] font-bold leading-tight lg:text-4xl">
               {titulo}
