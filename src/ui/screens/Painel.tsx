@@ -262,7 +262,7 @@ function Painel() {
                     enviar()
                   }
                 }}
-                placeholder="Pergunte qualquer coisa..."
+                placeholder="Não sabe por onde começar? Conte o que precisa estudar..."
                 className="flex-1 bg-transparent font-sans text-[16px] leading-6 text-white placeholder:text-white/40 outline-none py-1.5"
               />
               <button
