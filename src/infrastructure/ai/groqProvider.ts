@@ -14,6 +14,7 @@
     — tarefas leves como a narração do estudo: instantâneo e barato (tokens desprezíveis).
 */
 import type { AIProvider } from '../../application/ports/AIProvider'
+import { paraMensagens } from '../../application/ports/AIProvider'
 import { IALimiteError, ehStatusDeLimite } from '../../application/ports/aiErrors'
 
 const URL = 'https://api.groq.com/openai/v1/chat/completions'
@@ -37,7 +38,7 @@ function criarGroqProvider(modelo: string): AIProvider {
         headers: headers(),
         body: JSON.stringify({
           model: modelo,
-          messages: [{ role: 'user', content: prompt }],
+          messages: paraMensagens(prompt),
           stream: false,
           ...(opcoes?.json ? { response_format: { type: 'json_object' } } : {}),
         }),
@@ -58,7 +59,7 @@ function criarGroqProvider(modelo: string): AIProvider {
         headers: headers(),
         body: JSON.stringify({
           model: modelo,
-          messages: [{ role: 'user', content: prompt }],
+          messages: paraMensagens(prompt),
           stream: true,
         }),
       })

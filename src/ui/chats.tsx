@@ -16,6 +16,7 @@ import { ollamaProvider } from '../infrastructure/ai/ollamaProvider'
 import { groqProvider, groqConfigurado } from '../infrastructure/ai/groqProvider'
 import { geminiProvider, geminiConfigurado } from '../infrastructure/ai/geminiProvider'
 import { cloudflareProvider, cloudflareConfigurado } from '../infrastructure/ai/cloudflareProvider'
+import { openrouterProvider, openrouterConfigurado } from '../infrastructure/ai/openrouterProvider'
 import { fallbackProvider } from '../infrastructure/ai/fallbackProvider'
 import { proxyProvider } from '../infrastructure/ai/proxyProvider'
 import { retryProvider } from '../infrastructure/ai/retryProvider'
@@ -30,8 +31,9 @@ export type { Mensagem, Chat } // reexporta pra quem já importava daqui não qu
 // EM PRODUÇÃO: tudo pelo proxy (/api/*) — as chaves ficam no servidor, a cadeia roteia lá
 // (ver api/_lib/chain.ts: cadeiaChat() — Cloudflare primeiro, igual aqui).
 // EM DEV: Cloudflare primeiro (free tier mais rápido medido pro chat — TTFT < 0,4s contra
-// 4-11s do Gemini em prompts médios/complexos, ver docs/Infraestrutura.md), Gemini/Groq
-// de reserva, Ollama local por último como rede de segurança.
+// 4-11s do Gemini em prompts médios/complexos, ver docs/Infraestrutura.md), OpenRouter
+// (modelo ":free", sem disputar cota com o Groq) e Gemini de reserva (cota baixíssima:
+// 20 req/dia), Groq por último (reservado pro Estudar), Ollama local como rede de segurança.
 // retryProvider por fora: num pico de 429, espera (backoff) e tenta de novo UMA vez,
 // em silêncio — o aluno nem percebe. Vale tanto pro proxy (prod) quanto pra cadeia (dev).
 const ia = retryProvider(
@@ -39,6 +41,7 @@ const ia = retryProvider(
     ? proxyProvider
     : fallbackProvider([
         ...(cloudflareConfigurado ? [cloudflareProvider] : []),
+        ...(openrouterConfigurado ? [openrouterProvider] : []),
         ...(geminiConfigurado ? [geminiProvider] : []),
         ...(groqConfigurado ? [groqProvider] : []),
         ollamaProvider,

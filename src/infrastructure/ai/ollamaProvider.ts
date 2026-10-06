@@ -9,7 +9,8 @@
   Tem a MESMA interface do mockProvider — por isso plugar é trocar 1 linha:
   `const ia = mockProvider` -> `const ia = ollamaProvider`.
 */
-import type { AIProvider, GenerateOptions } from '../../application/ports/AIProvider'
+import type { AIProvider, GenerateOptions, PromptInput } from '../../application/ports/AIProvider'
+import { paraMensagens } from '../../application/ports/AIProvider'
 import { IALimiteError, ehStatusDeLimite } from '../../application/ports/aiErrors'
 
 // Configuração num lugar só. Vem de variável de ambiente (.env.local), com um padrão
@@ -38,18 +39,28 @@ const NUM_PREDICT = 6144
 // 0.3 mantém a resposta fluida mas mais ancorada. Vale pro chat (generateStream).
 const TEMPERATURA_CHAT = 0.3
 
-// Formato de cada linha que o Ollama devolve (tanto no stream quanto no completo).
+// Formato de cada linha que o Ollama devolve no /api/generate (completo e stream).
 // Só listamos os campos que a gente usa; o Ollama manda vários outros (metadados).
 type OllamaLinha = {
   response: string
   done: boolean
 }
 
+// Formato de cada linha do /api/chat (usado pelo Chat, com roles) — mesma ideia,
+// só que o texto vem dentro de "message.content" em vez de "response".
+type OllamaLinhaChat = {
+  message?: { content: string }
+  done: boolean
+}
+
 export const ollamaProvider: AIProvider = {
   // RESPOSTA COMPLETA (stream:false). Espera o modelo terminar e devolve o texto.
   // Se opcoes.json for true, liga o format:"json" do Ollama -> JSON válido garantido
-  // (é o que o buildStudy usa pra o parse nunca quebrar).
-  async generate(prompt: string, opcoes?: GenerateOptions): Promise<string> {
+  // (é o que o buildStudy usa pra o parse nunca quebrar). Só tarefas de 1 tiro (sem
+  // histórico/role) chamam generate() hoje, por isso aqui basta achatar pra string.
+  async generate(prompt: PromptInput, opcoes?: GenerateOptions): Promise<string> {
+    const textoPrompt =
+      typeof prompt === 'string' ? prompt : prompt.map((m) => m.content).join('\n\n')
     // aborta o fetch se passar do teto (evita o "carregando pra sempre")
     const controlador = new AbortController()
     const timer = setTimeout(() => controlador.abort(), TIMEOUT_MS)
@@ -59,7 +70,7 @@ export const ollamaProvider: AIProvider = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: MODELO,
-          prompt,
+          prompt: textoPrompt,
           stream: false,
           options: { num_predict: NUM_PREDICT },
           ...(opcoes?.json ? { format: 'json' } : {}),
@@ -84,14 +95,20 @@ export const ollamaProvider: AIProvider = {
     }
   },
 
-  // RESPOSTA EM PEDAÇOS (stream:true). O Ollama devolve NDJSON: uma linha JSON por
-  // token. A gente lê o corpo conforme chega, quebra em linhas e dá `yield` no
-  // `.response` de cada uma — até ver `done:true`. É o que alimenta o chat.
-  async *generateStream(prompt: string): AsyncIterable<string> {
-    const resposta = await fetch(`${URL}/api/generate`, {
+  // RESPOSTA EM PEDAÇOS (stream:true). É o que alimenta o Chat — por isso vai pro
+  // /api/chat (não /api/generate): esse endpoint entende messages[] com role
+  // system/user/assistant de verdade, em vez de um texto único colado. O Ollama
+  // devolve NDJSON: uma linha JSON por token, em "message.content".
+  async *generateStream(prompt: PromptInput): AsyncIterable<string> {
+    const resposta = await fetch(`${URL}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: MODELO, prompt, stream: true, options: { temperature: TEMPERATURA_CHAT } }),
+      body: JSON.stringify({
+        model: MODELO,
+        messages: paraMensagens(prompt),
+        stream: true,
+        options: { temperature: TEMPERATURA_CHAT },
+      }),
     })
     if (!resposta.ok || !resposta.body) {
       if (ehStatusDeLimite(resposta.status)) throw new IALimiteError(undefined, resposta.status)
@@ -113,8 +130,8 @@ export const ollamaProvider: AIProvider = {
 
       for (const linha of linhas) {
         if (!linha.trim()) continue
-        const dados = JSON.parse(linha) as OllamaLinha
-        if (dados.response) yield dados.response
+        const dados = JSON.parse(linha) as OllamaLinhaChat
+        if (dados.message?.content) yield dados.message.content
         if (dados.done) return
       }
     }

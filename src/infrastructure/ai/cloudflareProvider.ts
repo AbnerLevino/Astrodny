@@ -14,14 +14,20 @@
   é false e a cadeia de fallback simplesmente o ignora.
 */
 import type { AIProvider } from '../../application/ports/AIProvider'
+import { paraMensagens } from '../../application/ports/AIProvider'
 import { IALimiteError, ehStatusDeLimite } from '../../application/ports/aiErrors'
 
 const ACCOUNT_ID = import.meta.env.VITE_CF_ACCOUNT_ID ?? ''
 const KEY = import.meta.env.VITE_CF_API_TOKEN ?? ''
-const MODELO = import.meta.env.VITE_CF_MODEL ?? '@cf/meta/llama-3.1-8b-instruct-fast'
+const MODELO = import.meta.env.VITE_CF_MODEL ?? '@cf/meta/llama-3.3-70b-instruct-fp8-fast'
 const BASE = 'https://api.cloudflare.com/client/v4/accounts'
 
 export const cloudflareConfigurado = ACCOUNT_ID.length > 0 && KEY.length > 0
+
+// o padrão da Workers AI é baixo (~256) e corta respostas médias/complexas no meio
+// (medido: perguntas complexas truncavam perto de 900 chars, às vezes no meio de um
+// bloco de código). 2048 cobre até o prompt complexo testado (~2,8k chars de resposta).
+const MAX_TOKENS = 2048
 
 function headers() {
   return { 'Content-Type': 'application/json', Authorization: `Bearer ${KEY}` }
@@ -32,7 +38,7 @@ export const cloudflareProvider: AIProvider = {
     const r = await fetch(`${BASE}/${ACCOUNT_ID}/ai/run/${MODELO}`, {
       method: 'POST',
       headers: headers(),
-      body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] }),
+      body: JSON.stringify({ messages: paraMensagens(prompt), max_tokens: MAX_TOKENS }),
     })
     if (!r.ok) {
       if (ehStatusDeLimite(r.status)) throw new IALimiteError(undefined, r.status)
@@ -47,7 +53,7 @@ export const cloudflareProvider: AIProvider = {
     const r = await fetch(`${BASE}/${ACCOUNT_ID}/ai/run/${MODELO}`, {
       method: 'POST',
       headers: headers(),
-      body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], stream: true }),
+      body: JSON.stringify({ messages: paraMensagens(prompt), stream: true, max_tokens: MAX_TOKENS }),
     })
     if (!r.ok || !r.body) {
       if (ehStatusDeLimite(r.status)) throw new IALimiteError(undefined, r.status)

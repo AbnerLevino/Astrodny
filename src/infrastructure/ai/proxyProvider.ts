@@ -11,16 +11,20 @@
     generate      → POST /api/generate {prompt, json, device} → {text}
     generateStream→ POST /api/stream   {prompt, device}       → corpo de TEXTO puro (pedaços)
 */
-import type { AIProvider, GenerateOptions } from '../../application/ports/AIProvider'
+import type { AIProvider, GenerateOptions, PromptInput } from '../../application/ports/AIProvider'
+import { paraMensagens } from '../../application/ports/AIProvider'
 import { IALimiteError, ehStatusDeLimite } from '../../application/ports/aiErrors'
 import { deviceAnon } from './deviceAnon'
 
 export const proxyProvider: AIProvider = {
-  async generate(prompt: string, opcoes?: GenerateOptions): Promise<string> {
+  // Só tarefas de 1 tiro (buildStudy/buildExam/correção) chamam generate() hoje —
+  // sempre com string. Mantém a rota /api/generate como está (prompt solto).
+  async generate(prompt: PromptInput, opcoes?: GenerateOptions): Promise<string> {
+    const textoPrompt = typeof prompt === 'string' ? prompt : prompt.map((m) => m.content).join('\n\n')
     const r = await fetch('/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, json: opcoes?.json, device: deviceAnon() }),
+      body: JSON.stringify({ prompt: textoPrompt, json: opcoes?.json, device: deviceAnon() }),
     })
     const d = await r.json().catch(() => ({}) as { text?: string; error?: string })
     if (!r.ok) {
@@ -30,11 +34,11 @@ export const proxyProvider: AIProvider = {
     return d.text ?? ''
   },
 
-  async *generateStream(prompt: string): AsyncIterable<string> {
+  async *generateStream(prompt: PromptInput): AsyncIterable<string> {
     const r = await fetch('/api/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, device: deviceAnon() }),
+      body: JSON.stringify({ messages: paraMensagens(prompt), device: deviceAnon() }),
     })
     if (!r.ok || !r.body) {
       if (ehStatusDeLimite(r.status)) throw new IALimiteError(undefined, r.status)

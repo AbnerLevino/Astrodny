@@ -15,7 +15,7 @@ import type { Mensagem } from '../domain/chat'
 import type { Personalidade } from '../domain/settings'
 import type { Study } from '../domain/study'
 import type { ContextoEstudo, ProgressoEstudo } from '../domain/studyChat'
-import { montarPromptEstudo } from './prompts'
+import { montarMensagensEstudo } from './prompts'
 
 // Responde a uma dúvida do aluno DENTRO de um estudo, em stream.
 // `historico` é a conversa contextual daquele estudo (perguntas/respostas anteriores),
@@ -26,8 +26,8 @@ export function studyChat(
   ia: AIProvider,
   personalidade: Personalidade,
 ): AsyncIterable<string> {
-  const prompt = montarPromptEstudo(contexto, historico, personalidade)
-  return ia.generateStream(prompt)
+  const mensagens = montarMensagensEstudo(contexto, historico, personalidade)
+  return ia.generateStream(mensagens)
 }
 
 // Helper puro: monta o `ContextoEstudo` a partir do `Study` + o bloco atual + extras.

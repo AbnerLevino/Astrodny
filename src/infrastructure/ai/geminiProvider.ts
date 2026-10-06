@@ -8,7 +8,8 @@
   e empacota o texto em contents[].parts[].text. Este tradutor esconde essa diferença —
   pro resto do app, é só mais um AIProvider.
 */
-import type { AIProvider } from '../../application/ports/AIProvider'
+import type { AIProvider, PromptInput } from '../../application/ports/AIProvider'
+import { paraMensagens } from '../../application/ports/AIProvider'
 import { IALimiteError, ehStatusDeLimite } from '../../application/ports/aiErrors'
 
 const KEY = import.meta.env.VITE_GEMINI_API_KEY ?? ''
@@ -17,9 +18,20 @@ const BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
 
 export const geminiConfigurado = KEY.length > 0
 
-function corpo(prompt: string, json?: boolean) {
+// Gemini não tem role 'system' em contents[] — a instrução fixa vai à parte, em
+// systemInstruction. 'assistant' também não existe pra ele: o papel chama 'model'.
+function corpo(prompt: PromptInput, json?: boolean) {
+  const mensagens = paraMensagens(prompt)
+  const sistema = mensagens
+    .filter((m) => m.role === 'system')
+    .map((m) => m.content)
+    .join('\n\n')
+  const contents = mensagens
+    .filter((m) => m.role !== 'system')
+    .map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }))
   return JSON.stringify({
-    contents: [{ parts: [{ text: prompt }] }],
+    contents,
+    ...(sistema ? { systemInstruction: { parts: [{ text: sistema }] } } : {}),
     ...(json ? { generationConfig: { responseMimeType: 'application/json' } } : {}),
   })
 }

@@ -10,6 +10,7 @@ import type { Personalidade } from '../domain/settings'
 import type { Mensagem } from '../domain/chat'
 import type { ContextoEstudo } from '../domain/studyChat'
 import type { Perfil } from '../domain/perfil'
+import type { ChatMessage } from './ports/AIProvider'
 
 // A "instrução de sistema" do CHAT: define quem o tutor é. O método é o mesmo nos
 // dois (ensinar em porções, checar entendimento); muda só o TOM.
@@ -383,20 +384,16 @@ function descreverContexto(ctx: ContextoEstudo): string {
 
 // A "instrução de sistema" da CONVERSA CONTEXTUAL do estudo: reusa a persona/tom do
 // tutor (systemPromptTutor) e ACRESCENTA o contexto do estudo atual + as regras
-// específicas desse modo. Depois cola o histórico da conversa (continuidade) e deixa
-// o gancho "Assistente:" pra IA completar. É o gêmeo do montarPrompt do chat, mas
-// ciente de ONDE a pergunta está acontecendo.
-export function montarPromptEstudo(
+// específicas desse modo — tudo isso vai no papel 'system', SEPARADO da conversa
+// (cada mensagem do histórico vira seu turno 'user'/'assistant'). É o gêmeo do
+// montarMensagens do chat, mas ciente de ONDE a pergunta está acontecendo.
+export function montarMensagensEstudo(
   contexto: ContextoEstudo,
   historico: Mensagem[],
   personalidade: Personalidade,
-): string {
-  const sistema = systemPromptTutor(personalidade)
-  const conversa = historico
-    .map((m) => `${m.autor === 'user' ? 'Aluno' : 'Assistente'}: ${m.texto}`)
-    .join('\n')
-
-  return `${sistema}
+): ChatMessage[] {
+  const base = systemPromptTutor(personalidade)
+  const sistema = `${base}
 
 # Contexto do estudo atual
 O aluno está no modo ESTUDAR (não numa conversa solta). A dúvida abaixo acontece
@@ -410,11 +407,13 @@ ${descreverContexto(contexto)}
   NÃO significa que ele terminou o bloco — significa só que precisa de ajuda agora.
 - Seja focado e direto na dúvida; não repita o bloco inteiro, esclareça o ponto.
 - Se a dúvida fugir do estudo atual, ajude mesmo assim, mas tente conectar de volta ao
-  que ele está estudando.
+  que ele está estudando.`
 
-# Conversa
-${conversa}
-Assistente:`
+  const conversa: ChatMessage[] = historico.map((m) => ({
+    role: m.autor === 'user' ? 'user' : 'assistant',
+    content: m.texto,
+  }))
+  return [{ role: 'system', content: sistema }, ...conversa]
 }
 
 // O prompt do motor de insight do Painel: recebe o que já sabemos do aluno

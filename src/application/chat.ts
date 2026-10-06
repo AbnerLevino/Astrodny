@@ -9,7 +9,7 @@
   Espelha o buildStudy: lá é conteúdo -> prompt -> IA -> Study; aqui é
   histórico -> prompt -> IA -> stream de texto.
 */
-import type { AIProvider } from './ports/AIProvider'
+import type { AIProvider, ChatMessage } from './ports/AIProvider'
 import type { Mensagem } from '../domain/chat'
 import type { Personalidade } from '../domain/settings'
 import type { Perfil } from '../domain/perfil'
@@ -24,18 +24,26 @@ export function chat(
   personalidade: Personalidade,
   perfil?: Perfil,
 ): AsyncIterable<string> {
-  const prompt = montarPrompt(historico, personalidade, perfil)
-  return ia.generateStream(prompt)
+  const mensagens = montarMensagens(historico, personalidade, perfil)
+  return ia.generateStream(mensagens)
 }
 
-// Transforma a lista de mensagens num texto único pro modelo entender a conversa.
-// Começa pela "instrução de sistema" (quem o tutor é), depois o histórico.
+// Transforma a lista de mensagens da UI numa conversa com ROLE de verdade pro modelo:
+// 'system' (quem o tutor é, SEPARADO da conversa) + um turno 'user'/'assistant' por
+// mensagem do histórico. Antes isso virava um texto único (tudo colado, sem role) —
+// modelos de chat de verdade entendem melhor (e obedecem mais) a instrução quando ela
+// chega isolada no papel 'system', em vez de misturada ao fio da conversa.
 // Exportada (mesmo sendo um detalhe) pra ter teste próprio — é uma peça pura,
 // fácil de quebrar sem perceber quando mexermos no formato do prompt.
-export function montarPrompt(historico: Mensagem[], personalidade: Personalidade, perfil?: Perfil): string {
+export function montarMensagens(
+  historico: Mensagem[],
+  personalidade: Personalidade,
+  perfil?: Perfil,
+): ChatMessage[] {
   const sistema = systemPromptTutor(personalidade, perfil)
-  const conversa = historico
-    .map((m) => `${m.autor === 'user' ? 'Aluno' : 'Assistente'}: ${m.texto}`)
-    .join('\n')
-  return `${sistema}\n\n${conversa}\nAssistente:`
+  const conversa: ChatMessage[] = historico.map((m) => ({
+    role: m.autor === 'user' ? 'user' : 'assistant',
+    content: m.texto,
+  }))
+  return [{ role: 'system', content: sistema }, ...conversa]
 }

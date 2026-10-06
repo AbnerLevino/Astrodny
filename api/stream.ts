@@ -11,6 +11,7 @@
 import { cadeiaChat } from './_lib/chain'
 import { registrarEvento, type TipoEvento } from './_lib/log'
 import { ehLimite } from '../src/application/ports/aiErrors'
+import type { ChatMessage } from '../src/application/ports/AIProvider'
 
 export const config = { runtime: 'edge' }
 
@@ -21,17 +22,20 @@ export default async function handler(request: Request): Promise<Response> {
     return new Response('Use POST.', { status: 405 })
   }
 
-  let corpo: { prompt?: string; type?: TipoEvento; subject?: string; device?: string }
+  let corpo: { messages?: ChatMessage[]; type?: TipoEvento; subject?: string; device?: string }
   try {
     corpo = await request.json()
   } catch {
     return new Response('Corpo inválido (esperava JSON).', { status: 400 })
   }
 
-  const prompt = corpo.prompt
-  if (typeof prompt !== 'string' || prompt.trim() === '') {
-    return new Response('Faltou o campo "prompt".', { status: 400 })
+  const messages = corpo.messages
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return new Response('Faltou o campo "messages".', { status: 400 })
   }
+  // log: igual ao que o prompt-texto único registrava antes — a conversa inteira,
+  // com o role de cada turno, pra continuar dando pra auditar o que a IA recebeu.
+  const entradaLog = messages.map((m) => `${m.role}: ${m.content}`).join('\n\n')
 
   const encoder = new TextEncoder()
   let completo = '' // acumula pra logar no fim
@@ -39,7 +43,7 @@ export default async function handler(request: Request): Promise<Response> {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        for await (const pedaco of cadeiaChat().generateStream(prompt)) {
+        for await (const pedaco of cadeiaChat().generateStream(messages)) {
           completo += pedaco
           controller.enqueue(encoder.encode(pedaco))
         }
@@ -56,7 +60,7 @@ export default async function handler(request: Request): Promise<Response> {
         void registrarEvento({
           type: corpo.type ?? 'chat',
           subject: corpo.subject,
-          input: prompt,
+          input: entradaLog,
           output: completo,
           device_anon: corpo.device || NIL_UUID,
         })
