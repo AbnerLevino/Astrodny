@@ -43,14 +43,23 @@ function paraUsuario(u: User): Usuario {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [usuario, setUsuario] = useState<Usuario | null>(null)
   const [perfil, setPerfil] = useState<Perfil | null>(null)
+  const [perfilCarregado, setPerfilCarregado] = useState(false)
   const [carregando, setCarregando] = useState(true)
 
   // Carrega o que já foi salvo na nuvem (curso/nível/matérias). Se não houver
   // nada ainda (conta nova), o perfil fica só com o nome — perfilCompleto()
   // vê a falta do curso e o onboarding abre.
+  //
+  // perfilCarregado só vira true quando a resposta chega: enquanto isso,
+  // onboardingPendente fica falso de propósito (ver abaixo) — sem essa
+  // trava, um aluno com perfil completo veria o formulário de onboarding
+  // abrir sozinho por um instante a cada login/reload, porque `perfil`
+  // começa null até essa chamada assíncrona terminar.
   async function carregarPerfil(u: Usuario) {
+    setPerfilCarregado(false)
     const salvo = await buscarPerfil(u.id)
     setPerfil(salvo ? { ...salvo, nome: u.nome } : { nome: u.nome })
+    setPerfilCarregado(true)
   }
 
   useEffect(() => {
@@ -79,6 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setUsuario(null)
         setPerfil(null)
+        setPerfilCarregado(false)
       }
     })
 
@@ -87,10 +97,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function salvarPerfilContexto(dados: Perfil) {
     setPerfil(dados) // otimista: a tela não espera a nuvem pra refletir
+    setPerfilCarregado(true)
     if (usuario) await salvarPerfilNaNuvem(usuario.id, dados)
   }
 
-  const onboardingPendente = !!usuario && !perfilCompleto(perfil)
+  // só considera "pendente" depois que o perfil REAL chegou da nuvem — evita
+  // o flash do onboarding pra quem já tem curso preenchido (ver carregarPerfil).
+  const onboardingPendente = !!usuario && perfilCarregado && !perfilCompleto(perfil)
 
   return (
     <Contexto.Provider

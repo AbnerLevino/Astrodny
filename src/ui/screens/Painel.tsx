@@ -8,10 +8,9 @@
   sugestão personalizada ainda. Provas ainda não tem funcionalidade: clicar
   nele abre um aviso "em breve" com o que está planejado.
 
-  Sidebar: no DESKTOP fica escondida aqui (tela cheia, sem coluna lateral) —
-  só reaparece ao entrar numa área de trabalho (Chat/Estudar). No MOBILE
-  também fica escondida por enquanto (sem botão pra abrir o drawer a partir
-  do Painel — só ao entrar em Chat/Estudar).
+  Sidebar: no DESKTOP aparece como coluna fixa, igual às áreas de trabalho
+  (Chat/Estudar/Trabalhos). No MOBILE continua escondida por enquanto (sem
+  botão pra abrir o drawer a partir do Painel — só ao entrar em Chat/Estudar).
 */
 import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -188,7 +187,7 @@ function Painel() {
 
   return (
     <div className="relative min-h-dvh overflow-hidden bg-[#1a1a1c] lg:flex">
-      <Sidebar aoSelecionar={() => setMenuAberto(false)} escondidoNoDesktop />
+      <Sidebar aoSelecionar={() => setMenuAberto(false)} />
 
       <div
         className={`relative z-10 min-h-dvh transition-all duration-300 lg:flex-1 lg:translate-x-0 lg:blur-none ${

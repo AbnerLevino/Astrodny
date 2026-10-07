@@ -47,6 +47,8 @@ function Sidebar({
   const [perfilModalAberto, setPerfilModalAberto] = useState(false)
   // controla o modal cheio "Descubra o Astro!" (chamariz de login pra quem é visitante)
   const [descubraAberto, setDescubraAberto] = useState(false)
+  // Provas e Tarefas ainda não têm tela própria — mesmo aviso "em breve" do Painel
+  const [emBreve, setEmBreve] = useState<'provas' | 'tarefas' | null>(null)
 
   // Onboarding automático: loga e falta o curso → abre o formulário sozinho,
   // uma vez (o aluno pode fechar com "Agora não"; reaparece no próximo login
@@ -100,11 +102,19 @@ function Sidebar({
       <nav className="flex flex-col gap-1 p-4 pt-[max(1.5rem,env(safe-area-inset-top))] lg:gap-0 lg:p-3 lg:pt-[max(1.25rem,env(safe-area-inset-top))]">
         <ItemMenu label="Home" icone={<IconeHome />} onClick={() => irPara('/')} />
         <ItemMenu label="Novo Chat" icone={<IconeChat />} onClick={() => abrir(null)} />
-        <ItemMenu label="Novo Pensamento" icone={<IconeIdeia />} />
+        <ItemMenu label="Trabalhos" icone={<IconeEstrelaCadente />} onClick={() => irPara('/trabalhos')} />
+        <ItemMenu label="Provas" icone={<IconeLua />} onClick={() => setEmBreve('provas')} />
+        <ItemMenu label="Tarefas" icone={<IconeConstelacao />} onClick={() => setEmBreve('tarefas')} />
+
+        {/* separação pequena (só espaço, sem linha) antes do grupo de organização */}
+        <div className="h-2 lg:h-1.5" aria-hidden="true" />
+
         <ItemMenu label="Projetos" icone={<IconeLivro />} />
-        <ItemMenu label="Cronograma" icone={<IconeCalendario />} />
-        <ItemMenu label="Configurações" icone={<IconeSliders />} onClick={() => irPara('/config')} />
+        <ItemMenu label="Cronogramas" icone={<IconeCalendario />} />
       </nav>
+
+      {/* separação em linha antes do histórico */}
+      <div className="mx-4 border-t border-white/10 lg:mx-3" aria-hidden="true" />
 
       {/* histórico de estudos e de chats (rola quando tiver muitos) */}
       <div className="flex-1 overflow-y-auto px-4 lg:px-3">
@@ -258,6 +268,15 @@ function Sidebar({
         <ModalDescubraAstro
           aoEntrar={entrar}
           aoFechar={() => setDescubraAberto(false)}
+        />
+      )}
+
+      {/* "em breve": Provas e Tarefas ainda não têm tela própria */}
+      {emBreve && (
+        <ModalAviso
+          titulo={EM_BREVE_SIDEBAR[emBreve].titulo}
+          descricao={EM_BREVE_SIDEBAR[emBreve].descricao}
+          aoFechar={() => setEmBreve(null)}
         />
       )}
 
@@ -456,6 +475,52 @@ function BotaoMenuChat({
   )
 }
 
+// conteúdo do aviso "em breve" dos itens novos do menu que ainda não têm tela
+const EM_BREVE_SIDEBAR: Record<'provas' | 'tarefas', { titulo: string; descricao: string }> = {
+  provas: {
+    titulo: 'Provas — em breve',
+    descricao:
+      'Um modo de treino separado do Estudar: perguntas cronometradas, acertos e erros ' +
+      'registrados, várias tentativas e explicação de cada resposta — pra treinar pra prova ' +
+      'ou concurso igual quem já sabe o conteúdo, só precisa de ritmo e repertório.',
+  },
+  tarefas: {
+    titulo: 'Tarefas — em breve',
+    descricao:
+      'Uma lista das suas pendências (entregas, leituras, exercícios) com prazo e aviso perto ' +
+      'da data — pra não depender de lembrar de cabeça o que falta fazer.',
+  },
+}
+
+/* ===== modal de aviso genérico (só informa, um botão "Entendi") ===== */
+function ModalAviso({ titulo, descricao, aoFechar }: { titulo: string; descricao: string; aoFechar: () => void }) {
+  useEffect(() => {
+    function aoTeclar(e: KeyboardEvent) {
+      if (e.key === 'Escape') aoFechar()
+    }
+    window.addEventListener('keydown', aoTeclar)
+    return () => window.removeEventListener('keydown', aoTeclar)
+  }, [aoFechar])
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-end justify-center lg:items-center" role="dialog" aria-modal="true">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={aoFechar} />
+      <div className="animar-subida relative z-10 w-full border border-white/10 bg-[#141416] p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-white rounded-t-3xl lg:w-[26rem] lg:rounded-3xl">
+        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/20 lg:hidden" />
+        <h2 className="text-lg font-semibold">{titulo}</h2>
+        <p className="mt-2 text-sm leading-relaxed text-white/70">{descricao}</p>
+        <button
+          type="button"
+          onClick={aoFechar}
+          className="mt-5 w-full rounded-full border border-white/15 px-4 py-2.5 text-sm font-medium text-white/90 transition-colors hover:bg-white/5"
+        >
+          Entendi
+        </button>
+      </div>
+    </div>
+  )
+}
+
 /* ===== modal de confirmação genérico (usado no Excluir chat) ===== */
 function ModalConfirmar({
   titulo,
@@ -543,15 +608,6 @@ function IconeChat() {
   )
 }
 
-function IconeIdeia() {
-  return (
-    <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M11 3c.5 4 2 5.5 6 6-4 .5-5.5 2-6 6-.5-4-2-5.5-6-6 4-.5 5.5-2 6-6z" />
-      <path d="M18.5 14.5c.2 1.6.8 2.2 2.4 2.4-1.6.2-2.2.8-2.4 2.4-.2-1.6-.8-2.2-2.4-2.4 1.6-.2 2.2-.8 2.4-2.4z" />
-    </svg>
-  )
-}
-
 function IconeLivro() {
   return (
     <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
@@ -571,6 +627,39 @@ function IconeCalendario() {
       <ellipse cx="12" cy="12" rx="9.5" ry="4.2" transform="rotate(-28 12 12)" />
       <circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none" />
       <circle cx="19" cy="7.5" r="1.7" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+// Trabalhos: estrela cadente — algo sendo "escrito/produzido", deixando um rastro
+function IconeEstrelaCadente() {
+  return (
+    <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M13.5 3.5l1.3 3 3 1.3-3 1.3-1.3 3-1.3-3-3-1.3 3-1.3z" fill="currentColor" stroke="none" />
+      <path d="M4.5 20c3.2-.3 5.9-1.6 7.6-4.3" />
+      <path d="M4.5 20l2.6-.4M4.5 20l.4-2.6" />
+    </svg>
+  )
+}
+
+// Provas: lua crescente — a noite de revisão antes da prova
+function IconeLua() {
+  return (
+    <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+    </svg>
+  )
+}
+
+// Tarefas: constelação — pontos (pendências) ligados numa trajetória ascendente
+function IconeConstelacao() {
+  return (
+    <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 17.5l4-5.5 5 2.5 5-8" />
+      <circle cx="5" cy="17.5" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="9" cy="12" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="14" cy="14.5" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="19" cy="6.5" r="1.3" fill="currentColor" stroke="none" />
     </svg>
   )
 }
