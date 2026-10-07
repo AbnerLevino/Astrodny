@@ -41,7 +41,7 @@ export async function exportarAbnt(trabalho: Trabalho, config: ConfigFormatacao 
   const recuo = convertMillimetersToTwip(config.recuoParagrafoCm * 10)
   const espacamento = { line: linhaTwips(config.espacamentoLinhas), lineRule: 'auto' as const }
 
-  const corpoParagrafos: Paragraph[] = []
+  const corpoParagrafos: (Paragraph | TableOfContents)[] = []
 
   if (estrutura.temCapaFormal) {
     corpoParagrafos.push(...montarCapa(trabalho))
