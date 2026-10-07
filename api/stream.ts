@@ -13,6 +13,7 @@ import { registrarEvento, type TipoEvento } from './_lib/log'
 import { dentroDoLimite } from './_lib/rateLimit'
 import { MAX_MESSAGES_CHARS, somaCaracteres } from './_lib/limites'
 import { montarSystemPrompt } from './_lib/systemPrompt'
+import { headersCors } from './_lib/cors'
 import { ehLimite } from '../src/application/ports/aiErrors'
 import type { ChatMessage } from '../src/application/ports/AIProvider'
 import type { Personalidade } from '../src/domain/settings'
@@ -24,12 +25,18 @@ export const config = { runtime: 'edge' }
 const NIL_UUID = '00000000-0000-0000-0000-000000000000'
 
 export default async function handler(request: Request): Promise<Response> {
+  const cors = headersCors(request)
+
+  if (request.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: cors })
+  }
+
   if (request.method !== 'POST') {
-    return new Response('Use POST.', { status: 405 })
+    return new Response('Use POST.', { status: 405, headers: cors })
   }
 
   if (!(await dentroDoLimite(request))) {
-    return new Response('Muitas requisições. Aguarde um instante e tente de novo.', { status: 429 })
+    return new Response('Muitas requisições. Aguarde um instante e tente de novo.', { status: 429, headers: cors })
   }
 
   let corpo: {
@@ -45,16 +52,16 @@ export default async function handler(request: Request): Promise<Response> {
   try {
     corpo = await request.json()
   } catch {
-    return new Response('Corpo inválido (esperava JSON).', { status: 400 })
+    return new Response('Corpo inválido (esperava JSON).', { status: 400, headers: cors })
   }
 
   const messages = corpo.messages
   if (!Array.isArray(messages) || messages.length === 0) {
-    return new Response('Faltou o campo "messages".', { status: 400 })
+    return new Response('Faltou o campo "messages".', { status: 400, headers: cors })
   }
 
   if (somaCaracteres(messages) > MAX_MESSAGES_CHARS) {
-    return new Response(`Conversa muito grande (máx. ${MAX_MESSAGES_CHARS} caracteres).`, { status: 413 })
+    return new Response(`Conversa muito grande (máx. ${MAX_MESSAGES_CHARS} caracteres).`, { status: 413, headers: cors })
   }
 
   // log: igual ao que o prompt-texto único registrava antes — a conversa inteira,
@@ -103,6 +110,6 @@ export default async function handler(request: Request): Promise<Response> {
 
   return new Response(stream, {
     status: 200,
-    headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-cache' },
+    headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-cache', ...cors },
   })
 }
