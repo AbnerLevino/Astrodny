@@ -7,6 +7,9 @@
   Quem IMPLEMENTA isto vive na infraestrutura (mockProvider, futuro ollamaProvider).
   Trocar o fornecedor = trocar o adaptador. A aplicação não muda.
 */
+import type { Personalidade } from '../../domain/settings'
+import type { Perfil } from '../../domain/perfil'
+import type { ContextoEstudo } from '../../domain/studyChat'
 // Opções de uma geração. `json: true` pede pro modelo devolver JSON VÁLIDO
 // (no Ollama vira `format:"json"`). Usada pelo Estudo pra proteger o parse.
 // Opcional: o Chat não passa nada e recebe texto livre.
@@ -35,6 +38,18 @@ export type ChatMessage = { role: ChatRole; content: string }
 // (ou precisa de) histórico/role — só normalizar facilita a vida de quem implementa.
 export type PromptInput = string | ChatMessage[]
 
+// INGREDIENTES do system prompt do chat — NUNCA o texto pronto. (Task 3: o cliente
+// manda isto em vez de um `role: "system"` livre; quem transforma em texto é sempre
+// o servidor, em api/_lib/systemPrompt.ts, usando as mesmas funções de prompts.ts.)
+export type ModoChat = 'tutor' | 'mini_aula' | 'estudo'
+
+export type ChatMeta = {
+  modo: ModoChat
+  personalidade: Personalidade
+  perfil?: Perfil
+  contextoEstudo?: ContextoEstudo
+}
+
 // Normaliza um PromptInput pra lista de mensagens — um prompt solto vira 1 mensagem
 // 'user'. Cada provider usa isto pra nunca lidar com os dois formatos separadamente.
 export function paraMensagens(prompt: PromptInput): ChatMessage[] {
@@ -49,5 +64,9 @@ export interface AIProvider {
   // Resposta em PEDAÇOS (stream), conforme o modelo vai gerando. Usada pelo Chat,
   // pro efeito "digitando" ser real. AsyncIterable = "vou te entregando fatia por
   // fatia"; quem consome usa `for await`. É assim que o Ollama responde de verdade.
-  generateStream(prompt: PromptInput): AsyncIterable<string>
+  //
+  // `meta` é OPCIONAL e aditivo: só o `proxyProvider` (quem fala com o nosso backend)
+  // usa, pra mandar os INGREDIENTES do system prompt em vez do texto pronto — os
+  // providers locais (ollama/mock/groq/fallback/retry) ignoram e continuam iguais.
+  generateStream(prompt: PromptInput, meta?: ChatMeta): AsyncIterable<string>
 }

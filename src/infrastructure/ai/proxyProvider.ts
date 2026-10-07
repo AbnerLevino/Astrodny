@@ -11,7 +11,7 @@
     generate      → POST /api/generate {prompt, json, device} → {text}
     generateStream→ POST /api/stream   {prompt, device}       → corpo de TEXTO puro (pedaços)
 */
-import type { AIProvider, GenerateOptions, PromptInput } from '../../application/ports/AIProvider'
+import type { AIProvider, GenerateOptions, PromptInput, ChatMeta } from '../../application/ports/AIProvider'
 import { paraMensagens } from '../../application/ports/AIProvider'
 import { IALimiteError, ehStatusDeLimite } from '../../application/ports/aiErrors'
 import { deviceAnon } from './deviceAnon'
@@ -40,11 +40,23 @@ export const proxyProvider: AIProvider = {
     return d.text ?? ''
   },
 
-  async *generateStream(prompt: PromptInput): AsyncIterable<string> {
+  // `meta` traz os INGREDIENTES do system prompt (modo/personalidade/perfil/contexto) —
+  // NUNCA o texto pronto. O servidor (api/stream.ts) é quem monta o `system` de verdade;
+  // por isso aqui a gente FILTRA qualquer `role: "system"` antes de mandar — mesmo que
+  // algum caller monte um por engano, ele nunca sai daqui pro proxy.
+  async *generateStream(prompt: PromptInput, meta?: ChatMeta): AsyncIterable<string> {
+    const mensagens = paraMensagens(prompt).filter((m) => m.role !== 'system')
     const r = await fetch('/api/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: paraMensagens(prompt), device: deviceAnon() }),
+      body: JSON.stringify({
+        messages: mensagens,
+        modo: meta?.modo ?? 'tutor',
+        personalidade: meta?.personalidade ?? 'formal',
+        perfil: meta?.perfil,
+        contextoEstudo: meta?.contextoEstudo,
+        device: deviceAnon(),
+      }),
     })
     if (!r.ok || !r.body) {
       if (ehStatusDeLimite(r.status)) throw new IALimiteError(undefined, r.status)

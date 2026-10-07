@@ -12,8 +12,12 @@ import { cadeiaChat } from './_lib/chain'
 import { registrarEvento, type TipoEvento } from './_lib/log'
 import { dentroDoLimite } from './_lib/rateLimit'
 import { MAX_MESSAGES_CHARS, somaCaracteres } from './_lib/limites'
+import { montarSystemPrompt } from './_lib/systemPrompt'
 import { ehLimite } from '../src/application/ports/aiErrors'
 import type { ChatMessage } from '../src/application/ports/AIProvider'
+import type { Personalidade } from '../src/domain/settings'
+import type { Perfil } from '../src/domain/perfil'
+import type { ContextoEstudo } from '../src/domain/studyChat'
 
 export const config = { runtime: 'edge' }
 
@@ -28,7 +32,16 @@ export default async function handler(request: Request): Promise<Response> {
     return new Response('Muitas requisições. Aguarde um instante e tente de novo.', { status: 429 })
   }
 
-  let corpo: { messages?: ChatMessage[]; type?: TipoEvento; subject?: string; device?: string }
+  let corpo: {
+    messages?: ChatMessage[]
+    type?: TipoEvento
+    subject?: string
+    device?: string
+    modo?: string
+    personalidade?: Personalidade
+    perfil?: Perfil
+    contextoEstudo?: ContextoEstudo
+  }
   try {
     corpo = await request.json()
   } catch {
@@ -45,8 +58,17 @@ export default async function handler(request: Request): Promise<Response> {
   }
 
   // log: igual ao que o prompt-texto único registrava antes — a conversa inteira,
-  // com o role de cada turno, pra continuar dando pra auditar o que a IA recebeu.
+  // com o role de cada turno, pra continuar dando pra auditar o que a IA recebeu
+  // (texto ORIGINAL, antes de descartar o "system" forjado — ver abaixo).
   const entradaLog = messages.map((m) => `${m.role}: ${m.content}`).join('\n\n')
+
+  // NUNCA confia em role:"system" vindo do cliente — descarta e reconstrói aqui,
+  // a partir só dos campos estruturados (modo/personalidade/perfil/contextoEstudo).
+  // Esta é a linha que fecha a brecha: por mais que o corpo chegue com um `system`
+  // pronto (direto na API, sem passar pela UI), ele nunca entra na chamada à IA.
+  const conversa = messages.filter((m) => m.role !== 'system')
+  const sistema = montarSystemPrompt(corpo.modo, corpo.personalidade, corpo.perfil, corpo.contextoEstudo)
+  const mensagensFinais: ChatMessage[] = [{ role: 'system', content: sistema }, ...conversa]
 
   const encoder = new TextEncoder()
   let completo = '' // acumula pra logar no fim
@@ -54,7 +76,7 @@ export default async function handler(request: Request): Promise<Response> {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        for await (const pedaco of cadeiaChat().generateStream(messages)) {
+        for await (const pedaco of cadeiaChat().generateStream(mensagensFinais)) {
           completo += pedaco
           controller.enqueue(encoder.encode(pedaco))
         }

@@ -528,13 +528,13 @@ function descreverContexto(ctx: ContextoEstudo): string {
 // específicas desse modo — tudo isso vai no papel 'system', SEPARADO da conversa
 // (cada mensagem do histórico vira seu turno 'user'/'assistant'). É o gêmeo do
 // montarMensagens do chat, mas ciente de ONDE a pergunta está acontecendo.
-export function montarMensagensEstudo(
-  contexto: ContextoEstudo,
-  historico: Mensagem[],
-  personalidade: Personalidade,
-): ChatMessage[] {
+// Extraída do antigo `montarMensagensEstudo` (Task 3): agora é o SERVIDOR quem decide
+// chamar esta função (via api/_lib/systemPrompt.ts), a partir de campos estruturados —
+// nunca de texto livre vindo do cliente. O cliente continua podendo montar a prévia
+// localmente (ex.: pra outros usos), mas quem fala com a IA de verdade é o servidor.
+export function systemPromptEstudoContexto(contexto: ContextoEstudo, personalidade: Personalidade): string {
   const base = systemPromptTutor(personalidade)
-  const sistema = `${base}
+  return `${base}
 
 # Contexto do estudo atual
 O aluno está no modo ESTUDAR (não numa conversa solta). A dúvida abaixo acontece
@@ -549,7 +549,14 @@ ${descreverContexto(contexto)}
 - Seja focado e direto na dúvida; não repita o bloco inteiro, esclareça o ponto.
 - Se a dúvida fugir do estudo atual, ajude mesmo assim, mas tente conectar de volta ao
   que ele está estudando.`
+}
 
+export function montarMensagensEstudo(
+  contexto: ContextoEstudo,
+  historico: Mensagem[],
+  personalidade: Personalidade,
+): ChatMessage[] {
+  const sistema = systemPromptEstudoContexto(contexto, personalidade)
   const conversa: ChatMessage[] = historico.map((m) => ({
     role: m.autor === 'user' ? 'user' : 'assistant',
     content: m.texto,

@@ -25,7 +25,12 @@ export function chat(
   perfil?: Perfil,
 ): AsyncIterable<string> {
   const mensagens = montarMensagens(historico, personalidade, perfil)
-  return ia.generateStream(mensagens)
+  // Mesmo gatilho da mini-aula usado em montarMensagens: manda nos INGREDIENTES do
+  // system prompt (Task 3) — quem fala com o nosso backend (proxyProvider) usa isto
+  // pra deixar o SERVIDOR remontar o system, em vez de confiar no texto já pronto.
+  const ultima = historico[historico.length - 1]
+  const temAnexo = ultima?.autor === 'user' && !!ultima.anexos?.length
+  return ia.generateStream(mensagens, { modo: temAnexo ? 'mini_aula' : 'tutor', personalidade, perfil })
 }
 
 // Transforma a lista de mensagens da UI numa conversa com ROLE de verdade pro modelo:

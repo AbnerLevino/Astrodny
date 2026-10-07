@@ -27,7 +27,8 @@ export function studyChat(
   personalidade: Personalidade,
 ): AsyncIterable<string> {
   const mensagens = montarMensagensEstudo(contexto, historico, personalidade)
-  return ia.generateStream(mensagens)
+  // Ingredientes do system prompt (Task 3) — ver comentário em chat.ts.
+  return ia.generateStream(mensagens, { modo: 'estudo', personalidade, contextoEstudo: contexto })
 }
 
 // Helper puro: monta o `ContextoEstudo` a partir do `Study` + o bloco atual + extras.
