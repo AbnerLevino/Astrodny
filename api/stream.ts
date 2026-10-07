@@ -10,6 +10,7 @@
 */
 import { cadeiaChat } from './_lib/chain'
 import { registrarEvento, type TipoEvento } from './_lib/log'
+import { dentroDoLimite } from './_lib/rateLimit'
 import { ehLimite } from '../src/application/ports/aiErrors'
 import type { ChatMessage } from '../src/application/ports/AIProvider'
 
@@ -20,6 +21,10 @@ const NIL_UUID = '00000000-0000-0000-0000-000000000000'
 export default async function handler(request: Request): Promise<Response> {
   if (request.method !== 'POST') {
     return new Response('Use POST.', { status: 405 })
+  }
+
+  if (!(await dentroDoLimite(request))) {
+    return new Response('Muitas requisições. Aguarde um instante e tente de novo.', { status: 429 })
   }
 
   let corpo: { messages?: ChatMessage[]; type?: TipoEvento; subject?: string; device?: string }

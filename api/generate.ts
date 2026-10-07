@@ -11,6 +11,7 @@
 */
 import { cadeiaServidor } from './_lib/chain'
 import { registrarEvento, type TipoEvento } from './_lib/log'
+import { dentroDoLimite } from './_lib/rateLimit'
 import { ehLimite } from '../src/application/ports/aiErrors'
 
 export const config = { runtime: 'edge' }
@@ -20,6 +21,10 @@ const NIL_UUID = '00000000-0000-0000-0000-000000000000' // "sem device" (device_
 export default async function handler(request: Request): Promise<Response> {
   if (request.method !== 'POST') {
     return json({ error: 'Use POST.' }, 405)
+  }
+
+  if (!(await dentroDoLimite(request))) {
+    return json({ error: 'Muitas requisições. Aguarde um instante e tente de novo.' }, 429)
   }
 
   let corpo: {
