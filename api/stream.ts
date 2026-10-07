@@ -11,6 +11,7 @@
 import { cadeiaChat } from './_lib/chain'
 import { registrarEvento, type TipoEvento } from './_lib/log'
 import { dentroDoLimite } from './_lib/rateLimit'
+import { MAX_MESSAGES_CHARS, somaCaracteres } from './_lib/limites'
 import { ehLimite } from '../src/application/ports/aiErrors'
 import type { ChatMessage } from '../src/application/ports/AIProvider'
 
@@ -38,6 +39,11 @@ export default async function handler(request: Request): Promise<Response> {
   if (!Array.isArray(messages) || messages.length === 0) {
     return new Response('Faltou o campo "messages".', { status: 400 })
   }
+
+  if (somaCaracteres(messages) > MAX_MESSAGES_CHARS) {
+    return new Response(`Conversa muito grande (máx. ${MAX_MESSAGES_CHARS} caracteres).`, { status: 413 })
+  }
+
   // log: igual ao que o prompt-texto único registrava antes — a conversa inteira,
   // com o role de cada turno, pra continuar dando pra auditar o que a IA recebeu.
   const entradaLog = messages.map((m) => `${m.role}: ${m.content}`).join('\n\n')

@@ -12,6 +12,7 @@
 import { cadeiaServidor } from './_lib/chain'
 import { registrarEvento, type TipoEvento } from './_lib/log'
 import { dentroDoLimite } from './_lib/rateLimit'
+import { MAX_PROMPT_CHARS } from './_lib/limites'
 import { ehLimite } from '../src/application/ports/aiErrors'
 
 export const config = { runtime: 'edge' }
@@ -45,6 +46,10 @@ export default async function handler(request: Request): Promise<Response> {
   const prompt = corpo.prompt
   if (typeof prompt !== 'string' || prompt.trim() === '') {
     return json({ error: 'Faltou o campo "prompt".' }, 400)
+  }
+
+  if (prompt.length > MAX_PROMPT_CHARS) {
+    return json({ error: `Prompt muito grande (máx. ${MAX_PROMPT_CHARS} caracteres).` }, 413)
   }
 
   try {
