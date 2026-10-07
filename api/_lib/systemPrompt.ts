@@ -14,6 +14,12 @@ function personalidadeValida(p: unknown): p is Personalidade {
   return p === 'formal' || p === 'descontraido'
 }
 
+function modoValido(m: unknown): m is ModoChat {
+  return m === 'tutor' || m === 'mini_aula' || m === 'estudo' || m === 'narracao'
+}
+
+// Devolve '' pro modo 'narracao' (de propósito: sinaliza "sem system" pro chamador —
+// ver api/stream.ts, que só prepende a mensagem system quando isto vier não-vazio).
 export function montarSystemPrompt(
   modo: unknown,
   personalidadeBruta: unknown,
@@ -21,8 +27,9 @@ export function montarSystemPrompt(
   contextoEstudo?: ContextoEstudo,
 ): string {
   const personalidade: Personalidade = personalidadeValida(personalidadeBruta) ? personalidadeBruta : 'formal'
-  const modoChat = modo as ModoChat
+  const modoChat: ModoChat = modoValido(modo) ? modo : 'tutor'
 
+  if (modoChat === 'narracao') return ''
   if (modoChat === 'estudo' && contextoEstudo) {
     return systemPromptEstudoContexto(contextoEstudo, personalidade)
   }

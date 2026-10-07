@@ -75,7 +75,18 @@ export default async function handler(request: Request): Promise<Response> {
   // pronto (direto na API, sem passar pela UI), ele nunca entra na chamada à IA.
   const conversa = messages.filter((m) => m.role !== 'system')
   const sistema = montarSystemPrompt(corpo.modo, corpo.personalidade, corpo.perfil, corpo.contextoEstudo)
-  const mensagensFinais: ChatMessage[] = [{ role: 'system', content: sistema }, ...conversa]
+  // '' = modo 'narracao' (chamada de 1 tiro que já embute a instrução no próprio prompt
+  // do usuário) — nesse caso NÃO prepende system nenhum, igual ao comportamento de antes
+  // da Task 3 (ver narrarEstudo.ts).
+  const mensagensFinais: ChatMessage[] = sistema ? [{ role: 'system', content: sistema }, ...conversa] : conversa
+
+  // o teto acima só mediu `messages` (o que o CLIENTE mandou pronto); mas o `system` é
+  // MONTADO aqui a partir de `perfil`/`contextoEstudo` — campos sem teto próprio. Sem
+  // checar de novo DEPOIS de montar, um `contextoEstudo.blocoConteudo` gigante passaria
+  // reto pelo teto de entrada (mesma brecha de custo que o teto queria fechar).
+  if (somaCaracteres(mensagensFinais) > MAX_MESSAGES_CHARS) {
+    return new Response(`Conversa muito grande (máx. ${MAX_MESSAGES_CHARS} caracteres).`, { status: 413, headers: cors })
+  }
 
   const encoder = new TextEncoder()
   let completo = '' // acumula pra logar no fim

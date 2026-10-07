@@ -14,8 +14,20 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY ?? ''
 const LIMITE_REQUISICOES = 20
 const JANELA_SEGUNDOS = 60
 
+// `x-forwarded-for` pode vir com vários IPs separados por vírgula — um por proxy que a
+// requisição atravessou. Proxies ACRESCENTAM o IP que eles observaram ao FINAL da lista
+// (nunca reescrevem o que já tinha); então o PRIMEIRO item é o que o PRÓPRIO CLIENTE
+// mandou no header (totalmente forjável — um atacante manda um valor aleatório a cada
+// chamada e "reseta" o limite sempre). O ÚLTIMO item é o que a borda da Vercel (o hop
+// mais próximo do servidor, que o cliente não controla) efetivamente observou — é esse
+// que usamos como chave do rate limit.
 export function ipDaRequisicao(request: Request): string {
-  return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'desconhecido'
+  const direto = request.headers.get('x-real-ip')?.trim()
+  if (direto) return direto
+  const encaminhados = request.headers.get('x-forwarded-for')
+  if (!encaminhados) return 'desconhecido'
+  const partes = encaminhados.split(',').map((p) => p.trim()).filter(Boolean)
+  return partes[partes.length - 1] || 'desconhecido'
 }
 
 export async function dentroDoLimite(request: Request): Promise<boolean> {

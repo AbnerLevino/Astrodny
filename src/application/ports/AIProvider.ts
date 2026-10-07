@@ -41,7 +41,10 @@ export type PromptInput = string | ChatMessage[]
 // INGREDIENTES do system prompt do chat — NUNCA o texto pronto. (Task 3: o cliente
 // manda isto em vez de um `role: "system"` livre; quem transforma em texto é sempre
 // o servidor, em api/_lib/systemPrompt.ts, usando as mesmas funções de prompts.ts.)
-export type ModoChat = 'tutor' | 'mini_aula' | 'estudo'
+// 'narracao' é o único modo SEM persona (o servidor não prepara nenhum `system`) — usado
+// por narrarEstudo, uma chamada de 1 tiro que já manda a instrução inteira no próprio
+// prompt e nunca teve (nem deve ganhar) a personalidade do tutor por cima.
+export type ModoChat = 'tutor' | 'mini_aula' | 'estudo' | 'narracao'
 
 export type ChatMeta = {
   modo: ModoChat

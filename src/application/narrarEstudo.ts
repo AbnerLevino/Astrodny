@@ -24,5 +24,8 @@ export function narrarEstudo(
   ia: AIProvider,
   personalidade: Personalidade,
 ): AsyncIterable<string> {
-  return ia.generateStream(narrarEstudoPrompt(estudo, contexto, personalidade))
+  // modo 'narracao': sem persona de tutor por cima — o prompt já é a instrução inteira,
+  // auto-contida (ver prompts.ts/narrarEstudoPrompt), igual era antes do servidor passar
+  // a reconstruir um `system` por padrão pra toda chamada de stream (Task 3 do hardening).
+  return ia.generateStream(narrarEstudoPrompt(estudo, contexto, personalidade), { modo: 'narracao', personalidade })
 }
