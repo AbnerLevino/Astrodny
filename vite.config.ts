@@ -1,4 +1,5 @@
 /// <reference types="vitest/config" />
+import { configDefaults } from 'vitest/config'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -40,5 +41,8 @@ export default defineConfig({
   test: {
     // configuracao do Vitest (testes)
     globals: true,
+    // .worktrees tem checkouts PARALELOS do mesmo repo (ver superpowers:using-git-worktrees)
+    // — sem isso, o Vitest varre os testes de lá TAMBEM e conta tudo em dobro.
+    exclude: [...configDefaults.exclude, '.worktrees/**'],
   },
 })
