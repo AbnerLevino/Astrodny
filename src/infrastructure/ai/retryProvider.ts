@@ -14,7 +14,7 @@
 
   É um AIProvider (mesma porta), então quem usa nem sabe que há retry — é só "uma IA".
 */
-import type { AIProvider, GenerateOptions, PromptInput } from '../../application/ports/AIProvider'
+import type { AIProvider, ChatMeta, GenerateOptions, PromptInput } from '../../application/ports/AIProvider'
 import { ehLimite } from '../../application/ports/aiErrors'
 
 type OpcoesRetry = {
@@ -49,12 +49,12 @@ export function retryProvider(inner: AIProvider, opcoes: OpcoesRetry = {}): AIPr
       throw ultimoErro
     },
 
-    async *generateStream(prompt: PromptInput): AsyncIterable<string> {
+    async *generateStream(prompt: PromptInput, meta?: ChatMeta): AsyncIterable<string> {
       let ultimoErro: unknown
       for (let i = 0; i < tentativas; i++) {
         let emitiu = false
         try {
-          for await (const pedaco of inner.generateStream(prompt)) {
+          for await (const pedaco of inner.generateStream(prompt, meta)) {
             emitiu = true
             yield pedaco
           }

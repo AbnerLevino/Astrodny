@@ -8,7 +8,7 @@
   Ele mesmo É um AIProvider (mesma porta) — então o caso de uso `chat` nem sabe que
   existe fallback; pra ele é só "uma IA".
 */
-import type { AIProvider } from '../../application/ports/AIProvider'
+import type { AIProvider, ChatMeta } from '../../application/ports/AIProvider'
 import { IALimiteError, ehLimite } from '../../application/ports/aiErrors'
 
 export function fallbackProvider(provedores: AIProvider[]): AIProvider {
@@ -38,12 +38,12 @@ export function fallbackProvider(provedores: AIProvider[]): AIProvider {
     // Streaming com fallback: a decisão acontece no PRIMEIRO pedaço. Se pedir o
     // primeiro token e o provedor falhar (ex.: 429), caímos pro próximo ANTES de
     // desenhar qualquer coisa na tela. Depois que o texto começou, seguimos com ele.
-    async *generateStream(prompt) {
+    async *generateStream(prompt, meta?: ChatMeta) {
       let ultimoErro: unknown
       let houveLimite = false
       for (const p of provedores) {
         try {
-          const it = p.generateStream(prompt)[Symbol.asyncIterator]()
+          const it = p.generateStream(prompt, meta)[Symbol.asyncIterator]()
           const primeiro = await it.next() // aqui a conexão abre; se falhar, cai no catch
           if (!primeiro.done) yield primeiro.value
           while (true) {
