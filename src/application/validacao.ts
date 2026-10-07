@@ -9,7 +9,7 @@
   Moram aqui (e não dentro do buildStudy) porque DOIS casos de uso precisam delas: o
   buildStudy (valida os blocos da aula) e o buildExam (valida as questões da prova).
 */
-import type { Question, ProvaQuestion, Formato } from '../domain/study'
+import type { Question, ProvaQuestion, Formato, ExercicioCodigo } from '../domain/study'
 
 // ----- primitivos: as peças que todos os validadores usam -----
 
@@ -90,6 +90,21 @@ export function validarProvaQuestion(
   let blocoIndex = comoNumeroOuZero(o.blocoIndex)
   if (blocoIndex < 0 || blocoIndex >= totalBlocos) blocoIndex = 0
   return { ...base, blocoIndex }
+}
+
+// Valida o "exercicioCodigo" OPCIONAL de um bloco (mini-IDE). É ADITIVO e o modelo só
+// o inclui quando faz sentido — por isso DEGRADA em vez de lançar: qualquer forma
+// estranha (campo faltando, tipo errado) vira undefined, e o bloco segue sem o
+// exercício, em vez de derrubar o estudo inteiro por causa de um campo extra.
+export function validarExercicioCodigo(valor: unknown): ExercicioCodigo | undefined {
+  if (typeof valor !== 'object' || valor === null) return undefined
+  const o = valor as Record<string, unknown>
+  if (typeof o.linguagem !== 'string' || typeof o.enunciado !== 'string') return undefined
+  const respostaEsperada = typeof o.respostaEsperada === 'string' ? o.respostaEsperada : ''
+  const pontosChave = Array.isArray(o.pontosChave)
+    ? o.pontosChave.filter((p): p is string => typeof p === 'string')
+    : []
+  return { linguagem: o.linguagem, enunciado: o.enunciado, respostaEsperada, pontosChave }
 }
 
 // Igual ao comoTexto, mas NÃO lança: ausente/inválido vira null. Usado nas

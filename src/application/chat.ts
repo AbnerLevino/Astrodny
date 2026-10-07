@@ -13,7 +13,7 @@ import type { AIProvider, ChatMessage } from './ports/AIProvider'
 import type { Mensagem } from '../domain/chat'
 import type { Personalidade } from '../domain/settings'
 import type { Perfil } from '../domain/perfil'
-import { systemPromptTutor } from './prompts'
+import { systemPromptTutor, systemPromptMiniAulaPdf } from './prompts'
 
 // Devolve a resposta da IA em pedaços (stream), a partir do histórico da conversa.
 // A personalidade define o TOM do tutor (escolhida pelo usuário nas Configurações).
@@ -40,10 +40,20 @@ export function montarMensagens(
   personalidade: Personalidade,
   perfil?: Perfil,
 ): ChatMessage[] {
-  const sistema = systemPromptTutor(personalidade, perfil)
+  // Se a ÚLTIMA mensagem (a que dispara esta resposta) trouxe anexo(s), é o
+  // gatilho da mini-aula (Spec C) — só nesta resposta, o resto da conversa segue
+  // o tutor normal. O texto dos anexos vai embutido no turno 'user' (some da
+  // bolha na tela, mas a IA precisa dele) — quem decide isso é a UI, aqui só lemos.
+  const ultima = historico[historico.length - 1]
+  const sistema =
+    ultima?.autor === 'user' && ultima.anexos?.length
+      ? systemPromptMiniAulaPdf(personalidade, perfil)
+      : systemPromptTutor(personalidade, perfil)
   const conversa: ChatMessage[] = historico.map((m) => ({
     role: m.autor === 'user' ? 'user' : 'assistant',
-    content: m.texto,
+    content: m.anexos?.length
+      ? `${m.texto}\n\n${m.anexos.map((a) => `[Conteúdo extraído do arquivo "${a.nome}"]:\n${a.conteudo}`).join('\n\n')}`
+      : m.texto,
   }))
   return [{ role: 'system', content: sistema }, ...conversa]
 }

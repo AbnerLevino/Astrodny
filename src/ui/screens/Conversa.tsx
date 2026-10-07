@@ -7,12 +7,14 @@
     AQUI MESMO, no lugar da saudação. Nada de tela separada.
   Tocar na foto de perfil abre o menu lateral (Sidebar).
 */
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import { AbasFluxo } from '../abas'
-import { useChats } from '../chats'
+import { useChats, type Anexo } from '../chats'
 import { extrairAcao } from '../../application/chatAction'
+import { extractContent } from '../../application/extractContent'
+import { pdfExtractor } from '../../infrastructure/documents/pdfExtractor'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
@@ -20,6 +22,11 @@ import rehypeHighlight from 'rehype-highlight'
 const ALTURA_MAX = 160 // teto do campo (px): passou disso, rola em vez de crescer
 // status "pensando" (fake por enquanto; depois refletem as fases reais da IA)
 const STATUS = ['Pensando sobre isso…', 'Organizando a resposta…', 'Escrevendo…']
+
+// Um anexo ainda na fileira de quadradinhos, ANTES de enviar (enquanto extrai o
+// PDF ou já pronto, esperando o aluno apertar enviar). `id` é só pra React/remover
+// um item específico da lista — não existe fora desta tela.
+type AnexoPendente = { id: string; file: File; conteudo: string; extraindo: boolean }
 
 // Saudacao muda conforme a hora (Bom dia / Boa tarde / Boa noite).
 function saudacao(): string {
@@ -42,6 +49,57 @@ function Conversa() {
   const [statusIdx, setStatusIdx] = useState(0)
   const areaRef = useRef<HTMLTextAreaElement>(null)
   const fimRef = useRef<HTMLDivElement>(null)
+
+  // ===== Anexos (Spec C: mini-aula via PDF no chat) =====
+  // modalAberto = o "+" ao lado do enviar, com (por ora) só "Adicionar arquivos".
+  // arrastando = feedback visual enquanto um arquivo é arrastado sobre a tela (desktop).
+  // anexos é LISTA: dá pra anexar mais de um, cada um vira um quadradinho numa
+  // fileira (rolável) acima do input — sem ocupar a largura toda do placeholder.
+  const [modalAberto, setModalAberto] = useState(false)
+  const [arrastando, setArrastando] = useState(false)
+  const [anexos, setAnexos] = useState<AnexoPendente[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // extrai o texto do PDF (reaproveita o mesmo extractor do Estudar), um por vez
+  // mas em paralelo entre si (cada anexo tem seu próprio id, não trava os outros).
+  // Se falhar, some da fileira — não dá pra mandar uma mini-aula sem conteúdo.
+  async function processarArquivo(file: File) {
+    const idAnexo = Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
+    setAnexos((prev) => [...prev, { id: idAnexo, file, conteudo: '', extraindo: true }])
+    try {
+      const texto = await extractContent([file], pdfExtractor)
+      setAnexos((prev) => prev.map((a) => (a.id === idAnexo ? { ...a, conteudo: texto, extraindo: false } : a)))
+    } catch {
+      setAnexos((prev) => prev.filter((a) => a.id !== idAnexo))
+    }
+  }
+
+  function processarArquivos(files: FileList | File[]) {
+    Array.from(files).forEach(processarArquivo)
+  }
+
+  function removerAnexo(idAnexo: string) {
+    setAnexos((prev) => prev.filter((a) => a.id !== idAnexo))
+  }
+
+  function abrirSeletorArquivo() {
+    setModalAberto(false)
+    fileInputRef.current?.click()
+  }
+
+  // drag-and-drop (desktop): arrasta um ou mais PDFs pra qualquer lugar da tela.
+  function aoArrastarSobre(e: DragEvent) {
+    e.preventDefault()
+    setArrastando(true)
+  }
+  function aoSairArraste() {
+    setArrastando(false)
+  }
+  function aoSoltarArquivo(e: DragEvent) {
+    e.preventDefault()
+    setArrastando(false)
+    if (e.dataTransfer.files.length) processarArquivos(e.dataTransfer.files)
+  }
   const { criarChat, enviarMensagem, editarMensagem, pararResposta, obterChat, chatAtivoId, setChatAtivo, pensandoId } =
     useChats()
 
@@ -78,13 +136,21 @@ function Conversa() {
 
   function enviar() {
     const limpo = texto.trim()
-    if (!limpo) return
+    if (anexos.some((a) => a.extraindo)) return // espera os PDFs terminarem de extrair
+    const anexosProntos: Anexo[] = anexos.filter((a) => a.conteudo).map((a) => ({ nome: a.file.name, conteudo: a.conteudo }))
+    if (!limpo && anexosProntos.length === 0) return
+    // sem texto digitado mas com anexo: manda uma mensagem-placeholder (a bolha mostra os arquivos)
+    const mensagem =
+      limpo ||
+      `Anexei ${anexosProntos.length > 1 ? 'os arquivos' : 'o arquivo'} ${anexosProntos.map((a) => `"${a.nome}"`).join(', ')}.`
+    const anexosParaEnviar = anexosProntos.length ? anexosProntos : undefined
     if (chatAtivoId) {
-      enviarMensagem(chatAtivoId, limpo) // continua o chat aberto
+      enviarMensagem(chatAtivoId, mensagem, anexosParaEnviar) // continua o chat aberto
     } else {
-      navigate(`/chat/${criarChat(limpo)}`) // 1ª mensagem: cria o chat e reflete o id na URL
+      navigate(`/chat/${criarChat(mensagem, anexosParaEnviar)}`) // 1ª mensagem: cria o chat e reflete o id na URL
     }
     setTexto('')
+    setAnexos([])
     // no celular, some o teclado ao enviar (a mensagem entra e a tela volta ao normal)
     if (window.matchMedia('(pointer: coarse)').matches) areaRef.current?.blur()
     requestAnimationFrame(() => {
@@ -104,7 +170,18 @@ function Conversa() {
     // pra direita + desfoca ao abrir o menu (overflow-hidden corta o excesso).
     // No DESKTOP (lg+) vira flex: a Sidebar é coluna fixa e o conteudo ocupa o resto
     // (lg:flex-1), sem deslizar nem desfocar (lg:translate-x-0 lg:blur-none).
-    <div className="relative overflow-hidden min-h-dvh bg-[#1a1a1c] lg:flex">
+    <div
+      className="relative overflow-hidden min-h-dvh bg-[#1a1a1c] lg:flex"
+      onDragOver={aoArrastarSobre}
+      onDragLeave={aoSairArraste}
+      onDrop={aoSoltarArquivo}
+    >
+      {/* overlay enquanto arrasta um arquivo sobre a tela (só aparece durante o drag) */}
+      {arrastando && (
+        <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center border-4 border-dashed border-white/60 bg-black/60">
+          <p className="text-lg font-semibold text-white">Solte o arquivo pra anexar</p>
+        </div>
+      )}
       <Sidebar aoSelecionar={() => setMenuAberto(false)} aoAuroraHover={setAuroraAtiva} />
 
       <div
@@ -155,6 +232,7 @@ function Conversa() {
                   <MensagemUsuario
                     key={i}
                     texto={m.texto}
+                    nomesAnexos={m.anexos?.map((a) => a.nome)}
                     aoSalvar={(novo) => editarMensagem(chatAtivoId!, i, novo)}
                   />
                 ) : (
@@ -233,14 +311,62 @@ function Conversa() {
                   não parece trocar de lugar, é o mesmo chat com outra direção. */}
               <AbasFluxo />
 
-              {/* INPUT PILL — cartão próprio, totalmente arredondado (rounded-full).
-                  items-center = texto de 1 linha fica no meio; botões vão pro fim
-                  (self-end) quando o campo cresce. */}
+              {/* input de arquivo ESCONDIDO: o "+" abaixo e o drag-and-drop da tela
+                  toda chamam ele; aceita VÁRIOS de uma vez, só PDF (igual o Estudar). */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files?.length) processarArquivos(e.target.files)
+                  e.target.value = '' // permite escolher o(s) MESMO(S) arquivo(s) de novo depois
+                }}
+              />
+
+              {/* INPUT PILL — UMA caixa só (flex-col): a fileira de anexos (quando
+                  há) fica DENTRO, no topo — a borda cresce junto ("acopla"), em vez
+                  de ser uma caixa separada flutuando por cima. */}
               <div
-                className={`flex items-center gap-2 rounded-[26px] border backdrop-blur-md pl-4 pr-2 py-1.5 transition-colors duration-200 ${
+                className={`flex flex-col gap-2 rounded-[26px] border backdrop-blur-md px-2 py-1.5 transition-colors duration-200 ${
                   focado ? 'border-white/80 bg-white/10' : 'border-white/50 bg-white/5'
                 }`}
               >
+                {/* fileira de anexos pendentes: retângulos largos, rolável na
+                    horizontal. Cada um é independente: extrai em paralelo, remove
+                    sem afetar os outros. Nome numa linha só, ao lado do ícone. */}
+                {anexos.length > 0 && (
+                  <div className="flex gap-2 overflow-x-auto px-2 pt-1">
+                    {anexos.map((a) => (
+                      <div
+                        key={a.id}
+                        title={a.file.name}
+                        className="animar-subida relative flex h-11 w-40 shrink-0 items-center gap-1.5 rounded-xl border border-white/20 bg-white/5 px-2"
+                      >
+                        {a.extraindo ? (
+                          <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-white/30 border-t-white/80" />
+                        ) : (
+                          <IconeArquivo nome={a.file.name} />
+                        )}
+                        <span className="min-w-0 flex-1 truncate text-[11px] leading-tight text-white/70">
+                          {a.file.name}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removerAnexo(a.id)}
+                          aria-label="Remover arquivo"
+                          className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/80 text-[10px] text-white"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* linha da textarea + botões (era o conteúdo direto da pílula antes) */}
+                <div className="flex items-center gap-2 pl-2 pr-0">
                 <textarea
                   ref={areaRef}
                   value={texto}
@@ -263,13 +389,44 @@ function Conversa() {
                   className="flex-1 resize-none bg-transparent font-sans text-[18px] lg:text-[15px] leading-6 text-white placeholder:text-white/40 placeholder:text-[14px] outline-none py-1"
                   style={{ maxHeight: ALTURA_MAX }}
                 />
+                {/* "+" ao lado do enviar — abre o modal de opções (por ora só
+                    "Adicionar arquivos"; é aqui que mais opções entram depois). */}
+                <div className="relative shrink-0 self-end mb-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setModalAberto((v) => !v)}
+                    onMouseDown={(e) => e.preventDefault()}
+                    aria-label="Mais opções"
+                    className="flex h-8 w-8 items-center justify-center rounded-full border border-white/30 text-white/80 transition-colors active:bg-white/10"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 5v14M5 12h14" />
+                    </svg>
+                  </button>
+                  {modalAberto && (
+                    <>
+                      {/* backdrop: fecha o modal ao tocar fora */}
+                      <div className="fixed inset-0 z-30" onClick={() => setModalAberto(false)} />
+                      <div className="absolute bottom-full right-0 z-40 mb-2 w-52 overflow-hidden rounded-2xl border border-white/15 bg-[#232428] shadow-xl">
+                        <button
+                          type="button"
+                          onClick={abrirSeletorArquivo}
+                          className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-white/90 active:bg-white/10"
+                        >
+                          <IconeAnexo />
+                          Adicionar arquivos
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
                 {/* mesmo botão troca de função: pensando -> PARAR (quadrado),
                     senão -> ENVIAR (seta). Círculo azul-marinho em CSS. */}
                 <button
                   type="button"
                   onClick={gerando ? () => pararResposta(chatAtivoId!) : enviar}
                   onMouseDown={(e) => e.preventDefault()} // não tira o foco do campo (teclado não fecha, layout não pula no celular)
-                  disabled={!gerando && !texto.trim()} // gerando: sempre clicável (pra parar)
+                  disabled={!gerando && ((!texto.trim() && anexos.length === 0) || anexos.some((a) => a.extraindo))} // gerando: sempre clicável (pra parar)
                   aria-label={gerando ? 'Parar' : 'Enviar'}
                   className="shrink-0 self-end mb-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-[#0a1560] transition-opacity active:opacity-70 disabled:opacity-40"
                 >
@@ -282,6 +439,7 @@ function Conversa() {
                     </svg>
                   )}
                 </button>
+                </div>
               </div>
 
               {/* Aviso de falibilidade: só em conversa ativa (não polui a saudação).
@@ -394,6 +552,45 @@ function extrairTexto(node: ReactNode): string {
   return ''
 }
 
+// Ícone de anexo (clipe de papel) — usado no chip de anexo pendente, no item do
+// modal "Adicionar arquivos" e na bolha da mensagem que carregou o arquivo.
+function IconeAnexo() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+      <path d="M21.44 11.05 12.25 20.24a5 5 0 0 1-7.07-7.07l8.49-8.49a3.5 3.5 0 0 1 4.95 4.95l-8.49 8.49a2 2 0 0 1-2.83-2.83l7.78-7.78" />
+    </svg>
+  )
+}
+
+// Ícone de PDF: página clara com cantinho dobrado + faixa vermelha "PDF" embaixo
+// (padrão visual de ícone de arquivo real, não só um selo solto).
+function IconePdf() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" className="shrink-0">
+      {/* página, com o canto superior direito dobrado */}
+      <path
+        d="M6 2.5h8.17a1 1 0 0 1 .7.3l3.83 3.83a1 1 0 0 1 .3.7V20a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 20V4A1.5 1.5 0 0 1 6 2.5Z"
+        fill="#EDEEF0"
+      />
+      <path d="M14.5 2.7V6a1 1 0 0 0 1 1h3.3" fill="none" stroke="#C7C9CC" strokeWidth="1" />
+      {/* linhas de texto sugeridas (dão a sensação de página escrita) */}
+      <rect x="7" y="9" width="7" height="1.1" rx="0.5" fill="#C7C9CC" />
+      <rect x="7" y="11.3" width="5" height="1.1" rx="0.5" fill="#C7C9CC" />
+      {/* faixa vermelha com o rótulo */}
+      <rect x="4.3" y="13.8" width="13.4" height="6.6" rx="1.3" fill="#E5433A" />
+      <text x="11" y="18.6" textAnchor="middle" fontSize="6" fontWeight="800" fill="#fff" fontFamily="Arial, Helvetica, sans-serif">
+        PDF
+      </text>
+    </svg>
+  )
+}
+
+// Escolhe o ícone pelo NOME do arquivo (extensão) — hoje só PDF é aceito, mas já
+// fica pronto pra quando outros tipos entrarem (cai no clipe genérico).
+function IconeArquivo({ nome }: { nome: string }) {
+  return nome.toLowerCase().endsWith('.pdf') ? <IconePdf /> : <IconeAnexo />
+}
+
 // Ícone do botão de ação "Montar estudo de X" (livro simples).
 function IconeEstudar() {
   return (
@@ -479,7 +676,15 @@ function BotaoCopiar({
 //  - editando: o balão vira um campo de texto com Cancelar / Enviar.
 // Ao enviar a edição, chama aoSalvar(novoTexto) → o Context refaz a conversa dali.
 // Numa PWA de celular não há "hover", então as ações ficam sempre visíveis (discretas).
-function MensagemUsuario({ texto, aoSalvar }: { texto: string; aoSalvar: (novo: string) => void }) {
+function MensagemUsuario({
+  texto,
+  nomesAnexos,
+  aoSalvar,
+}: {
+  texto: string
+  nomesAnexos?: string[]
+  aoSalvar: (novo: string) => void
+}) {
   const [editando, setEditando] = useState(false)
   const [rascunho, setRascunho] = useState(texto)
   const campoRef = useRef<HTMLTextAreaElement>(null)
@@ -551,6 +756,12 @@ function MensagemUsuario({ texto, aoSalvar }: { texto: string; aoSalvar: (novo: 
   return (
     <div className="animar-subida self-end flex max-w-[80%] flex-col items-end">
       <div className="whitespace-pre-wrap break-words rounded-3xl bg-[#142073] px-4 py-2 font-sans text-[15px]">
+        {nomesAnexos?.map((nome, k) => (
+          <div key={k} className="mb-1.5 flex items-center gap-1.5 text-xs text-white/70">
+            <IconeArquivo nome={nome} />
+            {nome}
+          </div>
+        ))}
         {texto}
       </div>
       <div className="mt-0.5 flex gap-1">

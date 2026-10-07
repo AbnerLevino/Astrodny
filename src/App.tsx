@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router-dom'
 import Painel from './ui/screens/Painel'
 import Conversa from './ui/screens/Conversa'
 import StudySession from './ui/screens/StudySession'
+import Trabalho from './ui/screens/Trabalho'
 import Settings from './ui/screens/Settings'
 
 /*
@@ -10,6 +11,7 @@ import Settings from './ui/screens/Settings'
   "/chat"     -> Conversa, chat em branco (a conversa acontece aqui, inline)
   "/chat/:id" -> Conversa, abre um chat existente do histórico
   "/estudar"  -> Sessão de Estudo (o fluxo de 5 telas)
+  "/trabalhos"-> Trabalhos (colar texto -> IA estrutura -> visualizer ABNT)
   "/config"   -> Configurações (personalidade do tutor, etc.)
 */
 function App() {
@@ -23,6 +25,7 @@ function App() {
           <Route path="/chat" element={<Conversa />} />
           <Route path="/chat/:id" element={<Conversa />} />
           <Route path="/estudar" element={<StudySession />} />
+          <Route path="/trabalhos" element={<Trabalho />} />
           <Route path="/config" element={<Settings />} />
         </Routes>
       </div>

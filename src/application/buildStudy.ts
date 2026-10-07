@@ -22,7 +22,7 @@
 import type { AIProvider } from './ports/AIProvider'
 import type { Mode, Formato, Study, Block, EstudoConfig } from '../domain/study'
 import { buildStudyPrompt } from './prompts'
-import { comoObjeto, comoLista, comoTexto, validarPergunta } from './validacao'
+import { comoObjeto, comoLista, comoTexto, validarPergunta, validarExercicioCodigo } from './validacao'
 import { IALimiteError, ehLimite } from './ports/aiErrors'
 
 // Quantas vezes pedir à IA antes de desistir (a 1ª + 1 retry).
@@ -98,5 +98,6 @@ function validarBloco(valor: unknown, i: number, formato: Formato): Block {
       comoTexto(p, `bloco ${i}.conteudo[${k}]`),
     ),
     pergunta: validarPergunta(o.pergunta, `bloco ${i}.pergunta`, formato),
+    exercicioCodigo: validarExercicioCodigo(o.exercicioCodigo),
   }
 }

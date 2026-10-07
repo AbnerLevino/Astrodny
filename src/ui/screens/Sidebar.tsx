@@ -93,11 +93,11 @@ function Sidebar({
       className={`${apenasDesktop ? 'hidden lg:flex' : 'absolute inset-y-0 left-0 w-[78%] flex'} flex-col bg-black text-white ${
         escondidoNoDesktop
           ? 'lg:hidden'
-          : 'lg:relative lg:inset-auto lg:flex lg:w-[264px] lg:shrink-0 lg:border-r lg:border-white/10'
+          : 'lg:relative lg:inset-auto lg:flex lg:w-[240px] lg:shrink-0 lg:border-r lg:border-white/10'
       }`}
     >
       {/* itens do menu (sem logo: as opções sobem pro topo, respeitando o notch) */}
-      <nav className="flex flex-col gap-1 p-4 pt-[max(1.5rem,env(safe-area-inset-top))]">
+      <nav className="flex flex-col gap-1 p-4 pt-[max(1.5rem,env(safe-area-inset-top))] lg:gap-0 lg:p-3 lg:pt-[max(1.25rem,env(safe-area-inset-top))]">
         <ItemMenu label="Home" icone={<IconeHome />} onClick={() => irPara('/')} />
         <ItemMenu label="Novo Chat" icone={<IconeChat />} onClick={() => abrir(null)} />
         <ItemMenu label="Novo Pensamento" icone={<IconeIdeia />} />
@@ -107,7 +107,7 @@ function Sidebar({
       </nav>
 
       {/* histórico de estudos e de chats (rola quando tiver muitos) */}
-      <div className="flex-1 overflow-y-auto px-4">
+      <div className="flex-1 overflow-y-auto px-4 lg:px-3">
         {/* Estudos feitos: nome + nota + data (só leitura por enquanto) */}
         {estudos.length > 0 && (
           <>
@@ -184,43 +184,44 @@ function Sidebar({
             <p className="truncate text-sm text-white/50 lg:text-xs">
               {usuario ? (usuario.email ?? 'Conta Google') : 'Toque para entrar'}
             </p>
-            {!usuario ? (
-              // Visitante (sem login): chamariz pro login com Google — SEM "Evolua
-              // seu nível" (isso é só pra quem já está logado). No hover, acende a
-              // mini-aurora do botão E a aurora de fundo da página inteira (via
-              // aoAuroraHover, que a Home usa pra revelar o fundo-aurora atrás do véu).
-              <button
-                type="button"
-                onClick={() => setDescubraAberto(true)}
-                onMouseEnter={() => aoAuroraHover?.(true)}
-                onMouseLeave={() => aoAuroraHover?.(false)}
-                className="aurora-btn mt-2 inline-flex w-fit max-w-full items-center gap-1 whitespace-nowrap rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white/90 [&_svg]:h-4 [&_svg]:w-4 lg:mt-1.5 lg:px-2.5 lg:py-1 lg:text-xs lg:[&_svg]:h-[15px] lg:[&_svg]:w-[15px]"
-              >
-                <span className="aurora-brilho" aria-hidden="true" />
-                <span className="relative z-10 inline-flex items-center gap-1 whitespace-nowrap">
-                  <IconeEstrelas />
-                  Descubra o Astro!
-                </span>
-              </button>
-            ) : plano === 'free' ? (
-              // CTA de upgrade (pill) — aparece SÓ no plano Free, pra quem já está logado.
-              // TODO: abrir direto na aba Planos quando ela existir.
-              <button
-                type="button"
-                onClick={() => setModalAberto(true)}
-                className="aurora-btn mt-2 inline-flex items-center gap-1 rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white/90 [&_svg]:h-4 [&_svg]:w-4 lg:mt-1.5 lg:px-2.5 lg:py-1 lg:text-xs lg:[&_svg]:h-[15px] lg:[&_svg]:w-[15px]"
-              >
-                <span className="aurora-brilho" aria-hidden="true" />
-                <span className="relative z-10 inline-flex items-center gap-1">
-                  <IconeEstrelas />
-                  Evolua seu nível
-                </span>
-              </button>
-            ) : (
-              <p className="mt-0.5 text-sm text-white/50 lg:text-xs">Pro</p>
-            )}
+            {usuario &&
+              (plano === 'free' ? (
+                // CTA de upgrade (pill) — aparece SÓ no plano Free, pra quem já está logado.
+                // TODO: abrir direto na aba Planos quando ela existir.
+                <button
+                  type="button"
+                  onClick={() => setModalAberto(true)}
+                  className="aurora-btn mt-2 inline-flex items-center gap-1 rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white/90 [&_svg]:h-4 [&_svg]:w-4 lg:mt-1.5 lg:px-2.5 lg:py-1 lg:text-xs lg:[&_svg]:h-[15px] lg:[&_svg]:w-[15px]"
+                >
+                  <span className="aurora-brilho" aria-hidden="true" />
+                  <span className="relative z-10 inline-flex items-center gap-1">
+                    <IconeEstrelas />
+                    Evolua seu nível
+                  </span>
+                </button>
+              ) : (
+                <p className="mt-0.5 text-sm text-white/50 lg:text-xs">Pro</p>
+              ))}
           </div>
         </div>
+
+        {/* CTA "Descubra o Astro!": pro visitante, ABAIXO do cartão de
+            perfil, centralizado. */}
+        {!usuario && (
+          <button
+            type="button"
+            onClick={() => setDescubraAberto(true)}
+            onMouseEnter={() => aoAuroraHover?.(true)}
+            onMouseLeave={() => aoAuroraHover?.(false)}
+            className="aurora-btn mx-auto mt-3 flex w-fit max-w-full items-center justify-center gap-2 rounded-full bg-white/20 px-4 py-2 text-base font-medium text-white/90 [&_svg]:h-5 [&_svg]:w-5 lg:py-1.5 lg:text-sm lg:[&_svg]:h-[18px] lg:[&_svg]:w-[18px]"
+          >
+            <span className="aurora-brilho" aria-hidden="true" />
+            <span className="relative z-10 inline-flex items-center gap-2 whitespace-nowrap">
+              <IconeEstrelas />
+              Descubra o Astro!
+            </span>
+          </button>
+        )}
       </div>
 
       {/* modal da conta */}
@@ -511,7 +512,7 @@ function ItemMenu({ label, icone, onClick }: { label: string; icone: ReactNode; 
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center gap-3 w-full rounded-full px-4 py-3 text-left text-[17px] text-white/90 transition-colors hover:bg-white/5 active:bg-white/5 [&>svg]:h-[30px] [&>svg]:w-[30px] lg:py-2.5 lg:text-[15px] lg:[&>svg]:h-[27px] lg:[&>svg]:w-[27px]"
+      className="flex items-center gap-3 w-full rounded-full px-4 py-3 text-left text-[17px] text-white/90 transition-colors hover:bg-white/5 active:bg-white/5 [&>svg]:h-[30px] [&>svg]:w-[30px] lg:px-3 lg:py-1.5 lg:text-[14px] lg:[&>svg]:h-[22px] lg:[&>svg]:w-[22px]"
     >
       {icone}
       {label}

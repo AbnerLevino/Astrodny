@@ -10,7 +10,7 @@
   infrastructure/storage (localStorage) sem mudar quem usa este hook.
 */
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
-import type { Mensagem, Chat } from '../domain/chat'
+import type { Mensagem, Chat, Anexo } from '../domain/chat'
 import { chat } from '../application/chat'
 import { ollamaProvider } from '../infrastructure/ai/ollamaProvider'
 import { groqProvider, groqConfigurado } from '../infrastructure/ai/groqProvider'
@@ -25,15 +25,15 @@ import { localStorageChatRepository } from '../infrastructure/storage/localStora
 import { useSettings } from './settings'
 import { useAuth } from './auth'
 
-export type { Mensagem, Chat } // reexporta pra quem já importava daqui não quebrar
+export type { Mensagem, Chat, Anexo } // reexporta pra quem já importava daqui não quebrar
 
 // CADEIA DE IA DO CHAT.
 // EM PRODUÇÃO: tudo pelo proxy (/api/*) — as chaves ficam no servidor, a cadeia roteia lá
 // (ver api/_lib/chain.ts: cadeiaChat() — Cloudflare primeiro, igual aqui).
-// EM DEV: Cloudflare primeiro (free tier mais rápido medido pro chat — TTFT < 0,4s contra
-// 4-11s do Gemini em prompts médios/complexos, ver docs/Infraestrutura.md), OpenRouter
-// (modelo ":free", sem disputar cota com o Groq) e Gemini de reserva (cota baixíssima:
-// 20 req/dia), Groq por último (reservado pro Estudar), Ollama local como rede de segurança.
+// EM DEV: Cloudflare primeiro (bom em texto puro, mais rápido), Gemini em seguida
+// (contexto grande, bom pra quando o Cloudflare falha ou o assunto é mais complexo),
+// OpenRouter (modelo ":free", sem disputar cota com o Groq), Groq por último
+// (reservado pro Estudar), Ollama local como rede de segurança.
 // retryProvider por fora: num pico de 429, espera (backoff) e tenta de novo UMA vez,
 // em silêncio — o aluno nem percebe. Vale tanto pro proxy (prod) quanto pra cadeia (dev).
 const ia = retryProvider(
@@ -41,8 +41,8 @@ const ia = retryProvider(
     ? proxyProvider
     : fallbackProvider([
         ...(cloudflareConfigurado ? [cloudflareProvider] : []),
-        ...(openrouterConfigurado ? [openrouterProvider] : []),
         ...(geminiConfigurado ? [geminiProvider] : []),
+        ...(openrouterConfigurado ? [openrouterProvider] : []),
         ...(groqConfigurado ? [groqProvider] : []),
         ollamaProvider,
       ]),
@@ -61,8 +61,8 @@ type ChatsContexto = {
   chatAtivoId: string | null // qual chat está aberto na Home (null = saudação)
   pensandoId: string | null // qual chat está gerando resposta AGORA (null = nenhum)
   setChatAtivo: (id: string | null) => void
-  criarChat: (primeiraMensagem: string) => string // cria, marca como ativo e devolve o id
-  enviarMensagem: (id: string, texto: string) => void
+  criarChat: (primeiraMensagem: string, anexos?: Anexo[]) => string // cria, marca como ativo e devolve o id
+  enviarMensagem: (id: string, texto: string, anexos?: Anexo[]) => void
   // edita uma mensagem SUA já enviada (no índice dado) e refaz a conversa dali pra
   // frente: troca o texto, descarta a resposta antiga e o que veio depois, e a IA
   // responde de novo. É o comportamento do ChatGPT ao editar uma mensagem.
@@ -100,19 +100,19 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
   // o SEU controller, então uma não cancela a outra por engano.
   const abortRef = useRef<AbortController | null>(null)
 
-  function criarChat(primeiraMensagem: string): string {
+  function criarChat(primeiraMensagem: string, anexos?: Anexo[]): string {
     const id = novoId()
-    const titulo = primeiraMensagem.trim().slice(0, 40) || 'Novo chat'
-    const mensagens: Mensagem[] = [{ autor: 'user', texto: primeiraMensagem }]
+    const titulo = primeiraMensagem.trim().slice(0, 40) || anexos?.[0]?.nome || 'Novo chat'
+    const mensagens: Mensagem[] = [{ autor: 'user', texto: primeiraMensagem, anexos }]
     setChats((prev) => [{ id, titulo, mensagens, criadoEm: Date.now() }, ...prev]) // mais novo no topo
     setChatAtivo(id) // já abre esse chat na Home
     responderIA(id, mensagens) // dispara a resposta da IA
     return id
   }
 
-  function enviarMensagem(id: string, texto: string) {
+  function enviarMensagem(id: string, texto: string, anexos?: Anexo[]) {
     const chatAtual = chats.find((c) => c.id === id)
-    const historico: Mensagem[] = [...(chatAtual?.mensagens ?? []), { autor: 'user', texto }]
+    const historico: Mensagem[] = [...(chatAtual?.mensagens ?? []), { autor: 'user', texto, anexos }]
     setChats((prev) =>
       prev.map((c) => (c.id === id ? { ...c, mensagens: historico } : c)),
     )
@@ -145,9 +145,18 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
     abortRef.current = controller
     setPensandoId(id)
 
+    // Mini-aula via PDF (Spec C): o prompt embute o PDF inteiro, então pula a
+    // cadeia normal (que tenta Cloudflare primeiro — sem proxy, em dev, ele
+    // falha por CORS e só cai pro próximo depois de um tempo) e vai DIRETO pro
+    // Gemini, que tem contexto grande o suficiente pra isso. Sem chave de Gemini,
+    // cai de volta na cadeia normal (degradação, não quebra).
+    const ultima = historico[historico.length - 1]
+    const temAnexo = ultima?.autor === 'user' && !!ultima.anexos?.length
+    const provedor = temAnexo && geminiConfigurado ? retryProvider(geminiProvider) : ia
+
     let iaCriada = false
     try {
-      for await (const pedaco of chat(historico, ia, personalidade, perfil ?? undefined)) {
+      for await (const pedaco of chat(historico, provedor, personalidade, perfil ?? undefined)) {
         if (controller.signal.aborted) break
         if (!iaCriada) {
           adicionarMensagemIA(id, pedaco) // 1º pedaço: nasce a mensagem da IA

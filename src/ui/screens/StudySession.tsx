@@ -5,7 +5,7 @@
   Camada de apresentação (ui): só desenha e coleta. Fala com o caso de uso
   `buildStudy` (application), nunca com o modelo de IA direto.
 */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -16,6 +16,7 @@ import type {
   EstudoConfig,
   QuestionMultiplaEscolha,
   QuestionDiscursiva,
+  ExercicioCodigo,
   CorrecaoDiscursiva,
   ResultadoProva,
   ResultadoProvaDiscursiva,
@@ -25,7 +26,7 @@ import { buildStudy } from '../../application/buildStudy'
 import { buildExam } from '../../application/buildExam'
 import { narrarEstudo } from '../../application/narrarEstudo'
 import { gradeExam } from '../../application/gradeExam'
-import { gradeDiscursiveAnswer, gradeDiscursiveExam } from '../../application/gradeDiscursiveAnswer'
+import { gradeDiscursiveAnswer, gradeDiscursiveExam, gradeCodeAnswer } from '../../application/gradeDiscursiveAnswer'
 import { extractContent } from '../../application/extractContent'
 import { studyChat, montarContextoEstudo } from '../../application/studyChat'
 import { ollamaProvider } from '../../infrastructure/ai/ollamaProvider'
@@ -83,10 +84,13 @@ function StudySession() {
 
   return (
     <div className="relative isolate overflow-hidden h-svh flex flex-col bg-[#2e2f36] text-white lg:flex-row">
-      {/* No DESKTOP a sidebar fica fixa também no modo Estudar (coluna à esquerda);
-          escolher um chat/opção leva de volta pra Home (aoSelecionar). No MOBILE ela
-          some (apenasDesktop → hidden) e o estudo segue em tela cheia, imersivo. */}
-      <Sidebar apenasDesktop aoSelecionar={() => navigate('/')} />
+      {/* No DESKTOP a sidebar fica fixa também no modo Estudar (coluna à esquerda).
+          No MOBILE ela some (apenasDesktop → hidden) e o estudo segue em tela cheia,
+          imersivo. aoSelecionar é NO-OP: sem drawer mobile pra fechar aqui, e cada item
+          já navega pro destino certo por conta própria (ex.: "Novo Chat" → /chat) — não
+          dá pra sobrescrever isso navegando pra Home depois (era o bug: todo clique no
+          menu, inclusive "Novo Chat", acabava voltando pra Home). */}
+      <Sidebar apenasDesktop aoSelecionar={() => {}} />
       {/* área de conteúdo: ocupa o resto ao lado da sidebar (lg:flex-1). relative pra
           ancorar os rodapés absolutos das sub-telas. min-w-0 evita estouro horizontal;
           min-h-0 é ESSENCIAL: sem ele, o <main> de rolagem não encolhe e o conteúdo
@@ -100,7 +104,7 @@ function StudySession() {
           temaInicial={temaInicial}
           aoEscolherModo={setModo}
           aoEscolherFormato={setFormato}
-          aoVoltar={() => navigate('/')}
+          aoVoltar={() => navigate('/chat')}
           aoComecar={(pdfs, ctx, cfg) => {
             setArquivos(pdfs)
             setContexto(ctx ?? '')
@@ -555,11 +559,13 @@ function Preparar({ modo, formato, erro, temaInicial, aoEscolherModo, aoEscolher
       />
 
       {/* topo: voltar + nome da tela */}
-      <header className="relative z-10 flex items-center gap-3 px-5 pt-[max(1rem,env(safe-area-inset-top))] lg:mx-auto lg:w-full lg:max-w-[720px]">
-        <button type="button" onClick={aoVoltar} aria-label="Voltar" className="text-3xl leading-none -mt-1">
-          ‹
-        </button>
-        <span className="text-lg font-semibold">Novo estudo</span>
+      <header className="relative z-10 px-5 pt-[max(1rem,env(safe-area-inset-top))]">
+        <div className="mx-auto flex w-full items-center gap-3 lg:max-w-[860px]">
+          <button type="button" onClick={aoVoltar} aria-label="Voltar" className="text-3xl leading-none -mt-1">
+            ‹
+          </button>
+          <span className="text-lg font-semibold">Novo estudo</span>
+        </div>
       </header>
 
       {/* conteudo — pb maior que o pt empurra o grupo centralizado um pouco pra cima
@@ -569,7 +575,7 @@ function Preparar({ modo, formato, erro, temaInicial, aoEscolherModo, aoEscolher
             (ex.: com o toggle de formato), rola a partir do TOPO em vez de cortá-lo.
             O pt-8 no main "desce" o conteúdo um tico. Scroll invisível (sem-scrollbar +
             overflow-y-auto) já funciona com toque E mouse — nativo, sem detectar device. */}
-        <div className="m-auto w-full flex flex-col gap-6 lg:max-w-[720px]">
+        <div className="m-auto w-full flex flex-col gap-6 lg:max-w-[860px]">
         {/* aviso de falha na leitura anterior (some ao tentar de novo) */}
         {erro && (
           <div className="rounded-2xl border border-red-400/50 bg-red-400/10 px-4 py-3 text-sm text-red-200">
@@ -794,7 +800,8 @@ function Preparar({ modo, formato, erro, temaInicial, aoEscolherModo, aoEscolher
       {/* RODAPÉ: o canal do aluno (estudar é chat com direção). Em repouso o campo
           vai ATÉ o Avançar (ao lado, sem cobrir); ao focar, cresce "comendo" o
           botão, que fica acoplado na lateral direita. Enter avança, Shift+Enter quebra. */}
-      <footer className="relative z-10 px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-2 lg:mx-auto lg:w-full lg:max-w-[720px]">
+      <footer className="relative z-10 px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-2">
+        <div className="mx-auto w-full lg:max-w-[860px]">
         {/* as MESMAS abas da Home, aqui com "Estudar" aceso — continuidade: parece
             o mesmo chat, só que numa direção. Acompanham o teclado como o input. */}
         <div className="mb-3 translate-y-[calc(-1*var(--kb,0px))] transition-transform duration-300 ease-out">
@@ -857,6 +864,7 @@ function Preparar({ modo, formato, erro, temaInicial, aoEscolherModo, aoEscolher
             </svg>
           </button>
         </div>
+        </div>
       </footer>
     </>
   )
@@ -907,7 +915,7 @@ function TopoProgresso({
   aoVoltar?: () => void
 }) {
   return (
-    <header className="flex items-center gap-3 px-5 pt-[max(1rem,env(safe-area-inset-top))] lg:mx-auto lg:w-full lg:max-w-[720px]">
+    <header className="flex items-center gap-3 px-5 pt-[max(1rem,env(safe-area-inset-top))] lg:mx-auto lg:w-full lg:max-w-[860px]">
       {aoVoltar && (
         <button type="button" onClick={aoVoltar} aria-label="Voltar" className="-mt-1 text-3xl leading-none">
           ‹
@@ -1089,11 +1097,133 @@ function CartaoPerguntaDiscursiva({
   )
 }
 
+/* ===== Cartao de EXERCÍCIO DE CÓDIGO (mini-IDE) — ADITIVO, só aparece quando o
+   bloco trouxe `exercicioCodigo`. É o gêmeo do CartaoPerguntaDiscursiva: mesmo
+   fluxo (escreve -> corrige -> acerta ou tenta de novo), só troca a textarea por
+   uma monoespaçada (preserva indentação com Tab) e a correção por gradeCodeAnswer
+   (julga lógica/comportamento, não redação). */
+function CartaoExercicioCodigo({
+  exercicio,
+  conteudoBloco,
+  rotuloProximo,
+  aoProximo,
+}: {
+  exercicio: ExercicioCodigo
+  conteudoBloco: string[]
+  rotuloProximo: string
+  aoProximo: () => void
+}) {
+  const [codigo, setCodigo] = useState('')
+  const [corrigindo, setCorrigindo] = useState(false)
+  const [correcao, setCorrecao] = useState<CorrecaoDiscursiva | null>(null)
+
+  async function responder() {
+    if (!codigo.trim() || corrigindo) return
+    setCorrigindo(true)
+    try {
+      setCorrecao(await gradeCodeAnswer(exercicio, conteudoBloco, codigo, ia))
+    } catch {
+      setCorrecao({ nota: 0, acertou: false, porque: 'Não consegui corrigir agora. Tente de novo.', melhoria: '' })
+    } finally {
+      setCorrigindo(false)
+    }
+  }
+
+  function tentarDeNovo() {
+    setCorrecao(null)
+  }
+
+  // Tab insere 2 espaços em vez de tirar o foco do campo — sem isso, escrever
+  // código indentado numa textarea comum é desconfortável (Tab pula pro próximo elemento).
+  function aoTab(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key !== 'Tab') return
+    e.preventDefault()
+    const el = e.currentTarget
+    const inicio = el.selectionStart
+    const fim = el.selectionEnd
+    const novo = codigo.slice(0, inicio) + '  ' + codigo.slice(fim)
+    setCodigo(novo)
+    requestAnimationFrame(() => el.setSelectionRange(inicio + 2, inicio + 2))
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="font-medium">{exercicio.enunciado}</p>
+
+      <textarea
+        value={codigo}
+        onChange={(e) => setCodigo(e.target.value)}
+        onKeyDown={aoTab}
+        disabled={!!correcao || corrigindo}
+        rows={8}
+        spellCheck={false}
+        placeholder={`// escreva seu código em ${exercicio.linguagem} aqui…`}
+        className="resize-none rounded-xl border border-[#CACACA] bg-black px-4 py-3 font-mono text-[13px] leading-relaxed outline-none transition-colors focus:border-white disabled:opacity-70"
+      />
+
+      {!correcao ? (
+        <button
+          type="button"
+          disabled={!codigo.trim() || corrigindo}
+          onClick={responder}
+          className="mt-1 rounded-2xl border border-[#CACACA] bg-black py-3 font-semibold text-white disabled:opacity-40"
+        >
+          {corrigindo ? 'Corrigindo…' : 'Rodar correção'}
+        </button>
+      ) : (
+        <>
+          <div className={`rounded-2xl border p-4 ${correcao.acertou ? 'border-green-400/50 bg-green-400/10' : 'border-amber-400/50 bg-amber-400/10'}`}>
+            <p className={`text-sm font-semibold ${correcao.acertou ? 'text-green-300' : 'text-amber-300'}`}>
+              {correcao.nota}/100 — {correcao.acertou ? 'Boa, seu código funciona!' : 'Dá pra melhorar'}
+            </p>
+            {correcao.porque && <p className="mt-2 text-sm leading-relaxed text-white/80">{correcao.porque}</p>}
+            {correcao.melhoria && (
+              <p className="mt-2 text-sm leading-relaxed text-white/70">
+                <span className="font-medium text-white/85">Pra melhorar: </span>
+                {correcao.melhoria}
+              </p>
+            )}
+          </div>
+
+          {!correcao.acertou && (
+            <button
+              type="button"
+              onClick={tentarDeNovo}
+              className="rounded-2xl border border-white/30 bg-transparent py-3 font-semibold text-white active:bg-white/10"
+            >
+              Tentar de novo
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={aoProximo}
+            className="rounded-2xl border border-[#CACACA] bg-black py-3 font-semibold text-white"
+          >
+            {rotuloProximo}
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
+
 // Markdown da AULA: o conteúdo dos blocos agora é renderizado como markdown — assim
 // CÓDIGO em bloco (```java ... ```) aparece formatado (monoespaçado, com rolagem), em vez
 // de espremido numa linha de texto corrido. Negrito/listas também passam a funcionar.
 const mdAula: Components = {
-  p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
+  // parágrafo que começa com "Exemplo:" (prompt pede esse prefixo pros exemplos de cada
+  // tópico) ganha destaque visual — fica claro que é um caso aplicado, não texto corrido.
+  p: ({ children }) => {
+    const primeiro = Array.isArray(children) ? children[0] : children
+    const ehExemplo = typeof primeiro === 'string' && primeiro.trimStart().startsWith('Exemplo:')
+    return ehExemplo ? (
+      <p className="mb-3 last:mb-0 rounded-lg border-l-2 border-amber-400/60 bg-white/5 px-3 py-2">
+        {children}
+      </p>
+    ) : (
+      <p className="mb-3 last:mb-0">{children}</p>
+    )
+  },
   strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
   em: ({ children }) => <em className="italic">{children}</em>,
   ul: ({ children }) => <ul className="mb-3 ml-4 list-disc space-y-1">{children}</ul>,
@@ -1127,7 +1257,7 @@ function Aula({
 }) {
   const { personalidade } = useSettings()
   const [i, setI] = useState(0)
-  const [fase, setFase] = useState<'ensino' | 'pergunta'>('ensino')
+  const [fase, setFase] = useState<'ensino' | 'exercicio' | 'pergunta'>('ensino')
   const total = estudo.blocos.length
   const bloco = estudo.blocos[i]
   const ultimo = i === total - 1
@@ -1196,7 +1326,10 @@ function Aula({
   // É o padrão do WhatsApp (microfone↔enviar), trocado por avançar↔enviar.
   const temTexto = duvida.trim().length > 0
   function avancar() {
-    if (fase === 'ensino') setFase('pergunta')
+    // o exercício de código (mini-IDE) é ADITIVO: só entra no caminho quando o
+    // bloco trouxe um (decisão já tomada na geração, não aqui).
+    if (fase === 'ensino') setFase(bloco.exercicioCodigo ? 'exercicio' : 'pergunta')
+    else if (fase === 'exercicio') setFase('pergunta')
     else avancarBloco()
   }
 
@@ -1204,7 +1337,7 @@ function Aula({
     <>
       <TopoProgresso nome={estudo.nome} atual={i} total={total} aoVoltar={aoVoltar} />
       {/* pb-28 reserva espaço pro input fixo lá embaixo */}
-      <main className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-6 px-6 py-6 pb-[calc(7rem+var(--kb,0px))] lg:mx-auto lg:w-full lg:max-w-[720px]">
+      <main className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-6 px-6 py-6 pb-[calc(7rem+var(--kb,0px))] lg:mx-auto lg:w-full lg:max-w-[860px]">
         <h2 className="text-lg font-semibold">{bloco.titulo}</h2>
 
         {fase === 'ensino' ? (
@@ -1221,6 +1354,15 @@ function Aula({
               Terminou de ler? Use a seta embaixo pra avançar — ou escreva ali pra tirar uma dúvida.
             </p>
           </>
+        ) : fase === 'exercicio' && bloco.exercicioCodigo ? (
+          // Fase 1.5 (ADITIVA, só quando o bloco trouxe exercicioCodigo): mini-IDE
+          <CartaoExercicioCodigo
+            key={`${i}-codigo`}
+            exercicio={bloco.exercicioCodigo}
+            conteudoBloco={bloco.conteudo}
+            rotuloProximo="Ir para a pergunta"
+            aoProximo={() => setFase('pergunta')}
+          />
         ) : bloco.pergunta.tipo === 'discursivo' ? (
           // Fase 2 (discursivo): o aluno escreve, a IA corrige
           <CartaoPerguntaDiscursiva
@@ -1267,7 +1409,7 @@ function Aula({
 
       {/* INPUT FIXO: o controle é do aluno — ele pergunta a qualquer momento,
           sem travar o fluxo (pedir outro exemplo, tirar dúvida de um tópico…). */}
-      <footer className="absolute bottom-0 inset-x-0 z-20 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-6 bg-gradient-to-t from-[#0a0d1f] via-[#0a0d1f]/85 to-transparent translate-y-[calc(-1*var(--kb,0px))] transition-transform duration-200 ease-out lg:mx-auto lg:max-w-[720px]">
+      <footer className="absolute bottom-0 inset-x-0 z-20 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-6 bg-gradient-to-t from-[#0a0d1f] via-[#0a0d1f]/85 to-transparent translate-y-[calc(-1*var(--kb,0px))] transition-transform duration-200 ease-out lg:mx-auto lg:max-w-[860px]">
         <div
           className={`flex items-center gap-2 rounded-full border backdrop-blur-md pl-4 pr-2 py-1.5 transition-colors duration-200 ${
             duvidaFocada ? 'border-white/80 bg-white/10' : 'border-white/50 bg-white/5'
@@ -1350,7 +1492,7 @@ function ProvaMultiplaEscolha({
   return (
     <>
       <TopoProgresso nome="Prova" atual={i} total={total} />
-      <main className="flex-1 px-6 py-6 lg:mx-auto lg:w-full lg:max-w-[720px]">
+      <main className="flex-1 px-6 py-6 lg:mx-auto lg:w-full lg:max-w-[860px]">
         <CartaoPergunta
           key={i}
           pergunta={questao}
@@ -1418,7 +1560,7 @@ function ProvaDiscursiva({
   return (
     <>
       <TopoProgresso nome="Prova" atual={i} total={total} />
-      <main className="flex-1 px-6 py-6 flex flex-col gap-3 lg:mx-auto lg:w-full lg:max-w-[720px]">
+      <main className="flex-1 px-6 py-6 flex flex-col gap-3 lg:mx-auto lg:w-full lg:max-w-[860px]">
         <p className="font-medium">{questao.enunciado}</p>
         <textarea
           key={i}
@@ -1469,7 +1611,7 @@ function ResultadoMultiplaEscolha({
   aoSair: () => void
 }) {
   return (
-    <main className="flex-1 flex flex-col gap-6 px-6 py-8 overflow-y-auto lg:mx-auto lg:w-full lg:max-w-[720px]">
+    <main className="flex-1 flex flex-col gap-6 px-6 py-8 overflow-y-auto lg:mx-auto lg:w-full lg:max-w-[860px]">
       <div className="text-center">
         <p className="text-sm text-white/60">Resultado</p>
         <p className="text-4xl font-bold">
@@ -1537,7 +1679,7 @@ function ResultadoDiscursivo({
   aoSair: () => void
 }) {
   return (
-    <main className="flex-1 flex flex-col gap-6 px-6 py-8 overflow-y-auto lg:mx-auto lg:w-full lg:max-w-[720px]">
+    <main className="flex-1 flex flex-col gap-6 px-6 py-8 overflow-y-auto lg:mx-auto lg:w-full lg:max-w-[860px]">
       <div className="text-center">
         <p className="text-sm text-white/60">Resultado</p>
         <p className="text-4xl font-bold">{resultado.notaMedia}% 🎉</p>

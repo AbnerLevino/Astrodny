@@ -7,8 +7,15 @@
   (application/chat.ts) quanto a ui podem usá-la sem a aplicação depender da ui.
 */
 
-// uma fala da conversa: quem falou (aluno ou IA) e o texto
-export type Mensagem = { autor: 'user' | 'ia'; texto: string }
+// um arquivo anexado numa mensagem do aluno (ex.: PDF) — guarda o NOME (pra mostrar
+// na bolha) e o CONTEÚDO já extraído (pra IA usar). Nunca aparece pra IA junto do
+// `texto` normal: quem monta o prompt (application/chat.ts) decide como embutir.
+export type Anexo = { nome: string; conteudo: string }
+
+// uma fala da conversa: quem falou (aluno ou IA) e o texto. `anexos` é OPCIONAL —
+// só existe na mensagem do aluno que trouxe arquivo(s) (ver Anexo acima). É LISTA
+// porque o aluno pode anexar mais de um de uma vez (fileira de quadradinhos na ui).
+export type Mensagem = { autor: 'user' | 'ia'; texto: string; anexos?: Anexo[] }
 
 // uma conversa inteira: id, título (derivado da 1ª mensagem) e as mensagens.
 // É o que a gente vai persistir no histórico.

@@ -14,10 +14,11 @@ import type { AIProvider } from './ports/AIProvider'
 import type {
   Study,
   QuestionDiscursiva,
+  ExercicioCodigo,
   CorrecaoDiscursiva,
   ResultadoProvaDiscursiva,
 } from '../domain/study'
-import { montarPromptCorrecao } from './prompts'
+import { montarPromptCorrecao, montarPromptCorrecaoCodigo } from './prompts'
 
 const MAX_TENTATIVAS = 2
 const LIMIAR_APROVACAO = 60 // nota >= 60 => acertou
@@ -42,6 +43,31 @@ export async function gradeDiscursiveAnswer(
     }
   }
   throw new Error('A IA não conseguiu corrigir a resposta agora. Tente de novo.', {
+    cause: ultimoErro,
+  })
+}
+
+// Corrige UM exercício de CÓDIGO (mini-IDE). É o gêmeo de gradeDiscursiveAnswer,
+// mesma blindagem de JSON — só troca o prompt (avalia lógica, não redação).
+export async function gradeCodeAnswer(
+  exercicio: ExercicioCodigo,
+  conteudoBloco: string[],
+  codigoAluno: string,
+  ai: AIProvider,
+): Promise<CorrecaoDiscursiva> {
+  const prompt = montarPromptCorrecaoCodigo(exercicio, conteudoBloco, codigoAluno)
+
+  let ultimoErro: unknown
+  for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
+    try {
+      const resposta = await ai.generate(prompt, { json: true })
+      return validarCorrecao(extrairJson(resposta))
+    } catch (e) {
+      ultimoErro = e
+      console.warn(`gradeCodeAnswer: tentativa ${tentativa}/${MAX_TENTATIVAS} falhou:`, e)
+    }
+  }
+  throw new Error('A IA não conseguiu corrigir o código agora. Tente de novo.', {
     cause: ultimoErro,
   })
 }

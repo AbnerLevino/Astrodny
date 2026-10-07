@@ -6,7 +6,7 @@
   o evento anônimo. Roda no Edge do Vercel (rápido, barato, streaming nativo).
 
   Protocolo (o contrato entre o front e este proxy — simples de propósito):
-    entrada:  { prompt: string, json?: boolean, type?, subject?, device? }
+    entrada:  { prompt: string, json?: boolean, reasoningEffort?, maxCompletionTokens?, type?, subject?, device? }
     saída:    { text: string }   (ou { error } com status != 200)
 */
 import { cadeiaServidor } from './_lib/chain'
@@ -22,7 +22,15 @@ export default async function handler(request: Request): Promise<Response> {
     return json({ error: 'Use POST.' }, 405)
   }
 
-  let corpo: { prompt?: string; json?: boolean; type?: TipoEvento; subject?: string; device?: string }
+  let corpo: {
+    prompt?: string
+    json?: boolean
+    reasoningEffort?: 'low' | 'medium' | 'high'
+    maxCompletionTokens?: number
+    type?: TipoEvento
+    subject?: string
+    device?: string
+  }
   try {
     corpo = await request.json()
   } catch {
@@ -35,7 +43,11 @@ export default async function handler(request: Request): Promise<Response> {
   }
 
   try {
-    const text = await cadeiaServidor().generate(prompt, { json: corpo.json })
+    const text = await cadeiaServidor().generate(prompt, {
+      json: corpo.json,
+      reasoningEffort: corpo.reasoningEffort,
+      maxCompletionTokens: corpo.maxCompletionTokens,
+    })
     // coleta anônima (best-effort; não bloqueia a resposta se falhar)
     await registrarEvento({
       type: corpo.type ?? 'study_session',

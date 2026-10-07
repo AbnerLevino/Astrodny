@@ -34,6 +34,8 @@ function criarGroqProvider(modelo: string): AIProvider {
           messages: paraMensagens(prompt),
           stream: false,
           ...(opcoes?.json ? { response_format: { type: 'json_object' } } : {}),
+          ...(opcoes?.reasoningEffort ? { reasoning_effort: opcoes.reasoningEffort } : {}),
+          ...(opcoes?.maxCompletionTokens ? { max_completion_tokens: opcoes.maxCompletionTokens } : {}),
         }),
       })
       if (!r.ok) {

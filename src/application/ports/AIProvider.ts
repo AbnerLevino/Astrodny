@@ -10,7 +10,17 @@
 // Opções de uma geração. `json: true` pede pro modelo devolver JSON VÁLIDO
 // (no Ollama vira `format:"json"`). Usada pelo Estudo pra proteger o parse.
 // Opcional: o Chat não passa nada e recebe texto livre.
-export type GenerateOptions = { json?: boolean }
+//
+// `reasoningEffort`/`maxCompletionTokens`: só o Groq (modelos de raciocínio tipo
+// gpt-oss-120b) entende — os demais providers simplesmente ignoram o campo.
+// Usado pelo buildTrabalho: "low" evita que o modelo gaste tempo/tokens "pensando"
+// numa tarefa que é só ESTRUTURAR texto já pronto (não criar conteúdo), e o teto de
+// tokens generoso dá espaço pra trabalhos acadêmicos longos (TCC com várias seções).
+export type GenerateOptions = {
+  json?: boolean
+  reasoningEffort?: 'low' | 'medium' | 'high'
+  maxCompletionTokens?: number
+}
 
 // Uma mensagem de CONVERSA com papel (role) explícito — é como toda API de chat de
 // verdade (OpenAI/Groq/Cloudflare/Gemini/Ollama) entende contexto: 'system' é a

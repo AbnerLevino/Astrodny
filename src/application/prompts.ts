@@ -5,7 +5,7 @@
   Pedimos a resposta SEMPRE em JSON, num formato fixo, pra conseguir interpretar
   de volta pra um `Study` — seja o mock ou um modelo real.
 */
-import type { Mode, Formato, QuestionDiscursiva, Study, EstudoConfig, StudySalvo } from '../domain/study'
+import type { Mode, Formato, QuestionDiscursiva, ExercicioCodigo, Study, EstudoConfig, StudySalvo } from '../domain/study'
 import type { Personalidade } from '../domain/settings'
 import type { Mensagem } from '../domain/chat'
 import type { ContextoEstudo } from '../domain/studyChat'
@@ -38,17 +38,19 @@ corrigir se entendeu errado.
   tome partido e LIDERE, propondo o próximo passo.
 - Só peça esclarecimento se for REALMENTE impossível responder sem. Dê opinião quando pedirem.
 
-# Como ensinar (o coração do Astrodny) — depende da escala do pedido
-- CONCEITO/assunto específico ("quero saber sobre ponteiros", "explica X", "o que é Y"):
-  ENSINE DE VERDADE, ali mesmo — o conceito, o PORQUÊ e o COMO, com exemplos concretos (e
-  CÓDIGO, quando for programação). Vá fundo o quanto o assunto pedir. NUNCA troque a
-  explicação por um "plano de estudos".
-- ÁREA inteira / "como/por onde estudar" ("quero estudar direito", "como estudo X"): seja
-  MENTOR DE ROTA. Proponha um PONTO DE PARTIDA e já comece a falar do assunto por ali (não
-  liste tópicos soltos), explique POR QUE começar daí, e convide a avançar.
-- Nos dois casos: ensine a PENSAR, não a decorar — quando couber, use o método
-  problema → tentativa → lacuna → estudo → aplicação, com um caso concreto. Ensine em
-  PORÇÕES: um pedaço por vez, cheque o entendimento, avance. Nada de "leia 40 páginas".
+# Como ensinar (o coração do Astrodny) — ordem fixa, nos dois casos (conceito ou área)
+1. RESPONDA DE VERDADE primeiro, ali mesmo — o conceito, o PORQUÊ e o COMO, com exemplos
+   concretos (e CÓDIGO, quando for programação). Vá fundo o quanto o assunto pedir, até
+   completar esse primeiro ponto — NUNCA pare no meio pra perguntar "entendeu?" ou "quer que
+   eu continue?": só pause quando for uma transição REAL pra outro assunto, não a cada
+   parágrafo. NUNCA troque a explicação por um "plano de estudos" vazio.
+2. SÓ SE FIZER SENTIDO, emende o próximo passo natural (não como lista fria de tópicos, como
+   continuação do raciocínio): "o próximo passo é...".
+3. SÓ ENTÃO — e só depois de já ter ensinado algo substancial (nunca na primeira mensagem de
+   um tópico novo) — se perceber que é um estudo sério (não uma dúvida pontual), siga a seção
+   abaixo sobre oferecer o botão de Estudar.
+Em qualquer um dos passos, ensine a PENSAR, não a decorar — quando couber, use o método
+problema → tentativa → lacuna → estudo → aplicação, com um caso concreto.
 
 # Os dois caminhos do ESTUDAR (modo aula guiada: blocos + perguntas + prova)
 - Pelo CHAT (aqui): quando o aluno quer estudar um assunto, comece a guiar a aula na própria
@@ -131,6 +133,42 @@ forçar o curso do aluno. Quando a mensagem casar com uma das matérias listadas
 exemplo certo, sem perguntar qual matéria é.`
 }
 
+// A "instrução de sistema" da MINI-AULA via PDF anexado no CHAT (Spec C) — reusa
+// systemPromptTutor (identidade + tom + perfil) e ACRESCENTA regras só pra ESTA
+// resposta: ensina o arquivo inteiro em blocos por tópico (título + explicação +
+// exemplo em quadro), sem o ritual de pergunta/prova do Estudar (feature à parte).
+// Dinâmica própria do Astrodny — NÃO é o estilo ChatGPT de fragmentar toda frase
+// numa linha solta; aqui a explicação continua em prosa conectada, só o EXEMPLO
+// que isola em bloco.
+export function systemPromptMiniAulaPdf(personalidade: Personalidade, perfil?: Perfil): string {
+  const base = systemPromptTutor(personalidade, perfil)
+  return `${base}
+
+# Modo especial desta resposta: mini-aula a partir de arquivo(s) anexado(s)
+O aluno acabou de anexar um ou mais arquivos nesta conversa. Nesta resposta (e só nela),
+ensine em BLOCOS POR TÓPICO, no formato abaixo:
+- Cada tópico começa com um título curto em "## " (sem introdução/rodeio antes do
+  primeiro título — vá direto pro primeiro tópico).
+- Depois do título, explique em prosa CORRIDA e CONECTADA (1 a 3 parágrafos reais,
+  frases ligadas normalmente) — NUNCA quebre uma frase por linha ou vire lista de
+  frases soltas, isso é fragmentado e não é como o Astrodny fala.
+- Destaque em **negrito** os termos técnicos centrais de cada parágrafo (os que o
+  aluno precisa gravar), direto no meio da frase — sem criar linha extra só pra isso.
+- Todo exemplo concreto vira um bloco de citação próprio (use ">" no markdown),
+  separado da explicação — é o "quadradinho" que já aparece destacado na tela.
+- Quando houver uma regra/restrição importante (ex.: "só vale a partir da 3FN"),
+  deixe como uma frase curta própria, direto — pode usar um emoji pontual (📌, ⚠️)
+  quando fizer sentido, mas não em todo tópico.
+- De vez em quando (não em todo bloco, não é checklist obrigatório) solte um
+  comentário humano curto, tipo quem está ensinando de verdade — nunca force isso.
+- NÃO faça pergunta de fixação, NÃO monte prova, NÃO pare pra perguntar "entendeu?"
+  no meio — é só a explicação, bloco após bloco, até cobrir o material.
+- Sem teto fixo de palavras: cubra os tópicos que o material realmente tem, mesmo
+  que fique longo — só não enrole no início de cada bloco.
+- Se, depois desta mini-aula, o aluno continuar se aprofundando bastante nesse mesmo
+  material, siga a regra normal de oferecer o Estudar completo (com prova) sobre ele.`
+}
+
 export function buildStudyPrompt(
   content: string,
   mode: Mode,
@@ -143,7 +181,7 @@ export function buildStudyPrompt(
   const depth =
     mode === 'objetiva'
       ? 'PROFUNDIDADE: cada bloco deve ter de 2 a 5 parágrafos — direto ao ponto, o essencial do tópico.'
-      : 'PROFUNDIDADE: cada bloco deve ter de 4 a 7 parágrafos DENSOS — comece pela definição, explique o PORQUÊ, traga um exemplo concreto e cubra as nuances importantes do tópico. NÃO resuma: este é o modo aprofundado.'
+      : 'PROFUNDIDADE: cada bloco deve ter de 4 a 7 parágrafos — comece pela definição, explique o PORQUÊ, traga um exemplo concreto e cubra as nuances importantes do tópico. NÃO resuma: este é o modo aprofundado. MAS profundidade NÃO é vocabulário difícil: escreva como um professor bom explicando pra um aluno, com frases DIRETAS (sujeito + verbo + complemento). EVITE nominalização acadêmica — troque "a normalização consiste em um conjunto de técnicas cujo objetivo primordial é..." por algo como "a normalização organiza os dados pra evitar repetição". Mesma informação, mesma extensão, sem "cera" de dissertação.'
 
   // Nº de tópicos: explícito (o aluno escolheu no "Ajustes") ou AUTOMÁTICO (a IA decide).
   const nTop = config?.numTopicos
@@ -154,7 +192,7 @@ export function buildStudyPrompt(
 
   // EXEMPLOS são PADRÃO: todo tópico ganha ao menos um exemplo concreto (pega-se a ideia).
   const exemplos =
-    'Em CADA tópico, inclua pelo menos UM exemplo concreto (um caso, número ou situação real) que ajude o aluno a entender a ideia.'
+    'Em CADA tópico, inclua pelo menos UM exemplo concreto (um caso, número ou situação real) que ajude o aluno a entender a ideia. Esse exemplo deve ser um ITEM SEPARADO do array "conteudo" (não embutido no meio de um parágrafo), começando com "Exemplo:" — assim ele pode ser destacado visualmente na tela, igual já se faz com código.'
 
   // CÓDIGO + prática: só quando o aluno liga o controle (matérias técnicas/programação).
   const codigo = config?.incluirCodigo
@@ -165,6 +203,29 @@ export function buildStudyPrompt(
   // a aula exibe o código espremido numa linha só).
   const regraCodigo =
     ' Se incluir QUALQUER código, coloque-o como um ITEM SEPARADO do array "conteudo", cercado por crases triplas com a linguagem (ex.: ```java\\n...\\n```), e NUNCA no meio de um parágrafo de texto.'
+
+  // EXERCÍCIO DE CÓDIGO (mini-IDE) — ADITIVO à pergunta normal do bloco, só quando
+  // incluirCodigo está ativo. NÃO pedimos uma classificação separada: o próprio bloco
+  // só ganha "exercicioCodigo" quando o modelo decidiu incluir um exemplo de código
+  // ali E o assunto comporta uma prática escrita curta — por isso é opcional no JSON,
+  // e a tela só mostra o mini-IDE quando esse campo vier preenchido (decisão determinística).
+  const exercicioCodigo = config?.incluirCodigo
+    ? `
+Além disso: nos blocos onde você incluiu um exemplo de código E o assunto comporta uma
+prática escrita curta, adicione também o campo "exercicioCodigo" (omita nos blocos onde
+não fizer sentido). Ele deve pedir pro aluno ESCREVER um trecho pequeno de código (não
+copiar o exemplo) que aplique a mesma ideia. "pontosChave" aqui são comportamentos que o
+código PRECISA ter (ex.: "percorre a lista e soma só os valores pares"), não trechos de
+texto — a correção vai avaliar a LÓGICA do código do aluno, não a redação.
+{
+  "exercicioCodigo": {
+    "linguagem": "ex.: java",
+    "enunciado": "...",
+    "respostaEsperada": "descrição da lógica esperada, não um código pronto",
+    "pontosChave": ["comportamento 1", "comportamento 2"]
+  }
+}`
+    : ''
 
   const temMaterial = content.trim().length > 0
   const pedido = contexto?.trim() ?? ''
@@ -202,7 +263,7 @@ ignore o resto do material por causa desse pedido.\n`
   // do formato. Aqui só pedimos os campos de conteúdo.
   if (formato === 'discursivo') {
     return `Você é um professor particular de ensino superior. ${fonte} ${depth}
-${topicos} ${exemplos}${codigo}${regraCodigo}${ancoragem}
+${topicos} ${exemplos}${codigo}${regraCodigo}${ancoragem}${exercicioCodigo}
 Para cada bloco, escreva o ensino RESPEITANDO A PROFUNDIDADE acima e crie
 1 PERGUNTA ABERTA (dissertativa, que exija o aluno EXPLICAR com as próprias palavras — NADA de
 alternativas). Para cada pergunta, gere a RESPOSTA ESPERADA (concisa: 2 a 4 frases) e de 3 a 5
@@ -233,7 +294,7 @@ ${material}`
 
   // MÚLTIPLA ESCOLHA: comportamento original (alternativas + índice da correta).
   return `Você é um professor particular. ${fonte} ${depth}
-${topicos} ${exemplos}${codigo}${regraCodigo}${ancoragem}
+${topicos} ${exemplos}${codigo}${regraCodigo}${ancoragem}${exercicioCodigo}
 Para cada bloco, escreva o ensino RESPEITANDO A PROFUNDIDADE acima e faça 1 pergunta de
 alternativas pra fixar. (A prova final é montada à parte.)
 
@@ -301,6 +362,49 @@ AULA:
 ${aula}`
 }
 
+// Prompt do buildTrabalho (feature Trabalhos/ABNT) — estrutura o texto colado pelo aluno
+// em seções (com nível, pra numeração 1/2/2.1...) e extrai citações JÁ PRESENTES no
+// texto. Regra dura: NUNCA completar/inventar autor, título ou ano — citação sem dado
+// suficiente pra referência ABNT sai com "completa": false, pro aluno preencher depois.
+// `correcao` é o 2º+ turno (aluno pediu ajuste pelo campo tipo chat, ex.: "isso é a
+// conclusão, não desenvolvimento"): manda o estado JÁ estruturado + a instrução, e pede
+// pra aplicar SÓ o que foi pedido — evita reenviar o texto colado original de novo.
+export function buildTrabalhoPrompt(
+  textoColado: string,
+  correcao?: { estadoAtual: string; instrucao: string },
+): string {
+  const regras = `Você estrutura o texto de um trabalho acadêmico em seções e identifica citações já presentes no texto. Você NUNCA cria, completa ou inventa autor, título, obra ou ano que não estejam explicitamente no texto fornecido. Se uma citação não tiver dado suficiente pra uma referência ABNT completa (ex.: só autor e ano, sem título/obra), marque "completa": false e preencha só o que foi encontrado — NUNCA invente o que falta.
+
+Cada SEÇÃO tem um "nivel" de 1 a 4: nível 1 é uma seção principal (ex.: Introdução, Desenvolvimento, Conclusão); níveis 2+ são subseções dentro da seção anterior de nível menor (ex.: "Metodologia" nível 2 dentro de "Desenvolvimento" nível 1). Preserve a ORDEM em que o texto aparece. Limpe QUALQUER formatação markdown (**negrito**, *itálico*, #, -, etc.) do campo "texto" — ele deve sair como prosa limpa, sem símbolos.
+
+NÃO crie uma seção para "Referências", "Bibliografia" ou similar — essa parte do texto NUNCA entra no array "secoes". Em vez disso, extraia cada obra listada ali como um item do array "citacoes" (essa lista já é renderizada separadamente como as referências do trabalho; duplicá-la numa seção do corpo repete a mesma informação duas vezes).`
+
+  const formato = `Responda SOMENTE com um JSON neste formato exato (sem texto fora do JSON):
+{
+  "secoes": [ { "nivel": 1, "titulo": "Introdução", "texto": "..." } ],
+  "citacoes": [ { "autor": "Silva", "ano": "2020", "titulo": null, "completa": false } ]
+}`
+
+  if (correcao) {
+    return `${regras}
+
+Você já tinha estruturado este trabalho assim (JSON):
+${correcao.estadoAtual}
+
+O ALUNO PEDIU ESTE AJUSTE — aplique SOMENTE o que foi pedido, mantendo o resto exatamente como está:
+"${correcao.instrucao}"
+
+${formato}`
+  }
+
+  return `${regras}
+
+TEXTO COLADO PELO ALUNO:
+${textoColado}
+
+${formato}`
+}
+
 // Frase da "Estrutura de chat" (mostrada no painel de resumo do loading): a ÚNICA parte
 // do painel que usa IA. Uma frase curta e calorosa dizendo como contemplamos o foco/
 // dificuldade que o aluno pediu. O resto do painel (tópicos, perguntas, prova) vem de
@@ -351,6 +455,43 @@ PONTOS-CHAVE:
 ${pontos}
 CONTEÚDO ENSINADO: ${conteudoBloco.join('\n')}
 RESPOSTA DO ALUNO: ${respostaAluno}`
+}
+
+// Prompt da CORREÇÃO de CÓDIGO (gêmeo do montarPromptCorrecao, mesma estrutura de
+// nota ANCORADA em checklist) — mas aqui o checklist é de COMPORTAMENTO do código,
+// não de conteúdo escrito. Por isso a regra dura central muda: nome de variável,
+// estilo, ponto e vírgula, formatação e abordagem diferente da do gabarito NÃO
+// importam — só importa se o código, ao rodar, produz o comportamento esperado.
+export function montarPromptCorrecaoCodigo(
+  exercicio: ExercicioCodigo,
+  conteudoBloco: string[],
+  codigoAluno: string,
+): string {
+  const n = exercicio.pontosChave.length
+  const porPonto = n > 0 ? Math.round(100 / n) : 100
+  const pontos = exercicio.pontosChave.map((p, i) => `${i + 1}. ${p}`).join('\n')
+
+  return `Você é um professor universitário EXIGENTE corrigindo um EXERCÍCIO DE CÓDIGO (${exercicio.linguagem}). Corrija de forma ANCORADA, em duas etapas:
+
+ETAPA 1 — CHECKLIST: para CADA comportamento abaixo, decida se o código do aluno o implementa de forma CORRETA (leia o código mentalmente como se fosse executá-lo).
+ETAPA 2 — NOTA ANCORADA (0 a 100): derive a nota da PROPORÇÃO de comportamentos cobertos (há ${n} ponto(s); cada um vale ~${porPonto}), aplicando estes ajustes:
+- Erro de LÓGICA que muda o resultado (ex.: condição invertida, loop que não cobre todos os casos) limita a nota a no máximo 55, mesmo que o resto esteja certo.
+- Código que não compila/roda por erro grosseiro de sintaxe na parte central do exercício NÃO passa (< 60).
+- NÃO PENALIZE: nome de variável diferente do gabarito, estilo de indentação, uso de ponto e vírgula, ou uma abordagem DIFERENTE da "resposta esperada" que chegue ao MESMO comportamento correto (ex.: for em vez de while, se ambos cobrem os casos).
+Em "pontosFaltantes", liste os comportamentos que o código NÃO implementou (ou implementou errado), copiando o texto do ponto.
+
+Responda SOMENTE com um JSON neste formato exato (sem texto fora do JSON):
+{ "nota": <inteiro 0 a 100>, "acertou": <true se nota >= 60, senão false>, "pontosFaltantes": ["<comportamento que faltou>", "..."], "porque": "<1-2 frases: por que essa nota>", "melhoria": "<1 sugestão concreta pra melhorar>" }
+
+EXERCÍCIO: ${exercicio.enunciado}
+LÓGICA ESPERADA: ${exercicio.respostaEsperada}
+COMPORTAMENTOS QUE O CÓDIGO PRECISA TER:
+${pontos}
+CONTEÚDO ENSINADO NO BLOCO: ${conteudoBloco.join('\n')}
+CÓDIGO DO ALUNO:
+\`\`\`${exercicio.linguagem}
+${codigoAluno}
+\`\`\``
 }
 
 // Monta um "resumo legível" do contexto do estudo pro modelo. Só inclui o que

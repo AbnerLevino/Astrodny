@@ -56,11 +56,24 @@ export type QuestionDiscursiva = {
 // uma pergunta é UMA das duas (o `tipo` decide)
 export type Question = QuestionMultiplaEscolha | QuestionDiscursiva
 
-// um bloco da aula: um pedaço do conteúdo (parágrafos) + 1 pergunta pra fixar
+// Exercício de CÓDIGO (mini-IDE): ADITIVO — não substitui a `pergunta` do bloco,
+// some junto quando o bloco tem um exemplo de código que comporta prática escrita.
+// A correção reaproveita o formato de CorrecaoDiscursiva, mas julgando LÓGICA/
+// comportamento do código (não redação) — ver montarPromptCorrecaoCodigo.
+export type ExercicioCodigo = {
+  linguagem: string // ex.: "java", "python" — mesma linguagem do exemplo do bloco
+  enunciado: string // o que o aluno deve escrever/implementar
+  respostaEsperada: string // a lógica/abordagem esperada (gabarito, não cópia exata)
+  pontosChave: string[] // o que o código PRECISA fazer pra estar correto
+}
+
+// um bloco da aula: um pedaço do conteúdo (parágrafos) + 1 pergunta pra fixar.
+// `exercicioCodigo` é OPCIONAL e aditivo — ver tipo acima.
 export type Block = {
   titulo: string
   conteudo: string[]
   pergunta: Question
+  exercicioCodigo?: ExercicioCodigo
 }
 
 // uma questão da PROVA: uma pergunta normal + a qual bloco ela pertence.

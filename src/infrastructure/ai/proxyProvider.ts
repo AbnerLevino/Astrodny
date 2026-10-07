@@ -24,7 +24,13 @@ export const proxyProvider: AIProvider = {
     const r = await fetch('/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: textoPrompt, json: opcoes?.json, device: deviceAnon() }),
+      body: JSON.stringify({
+        prompt: textoPrompt,
+        json: opcoes?.json,
+        reasoningEffort: opcoes?.reasoningEffort,
+        maxCompletionTokens: opcoes?.maxCompletionTokens,
+        device: deviceAnon(),
+      }),
     })
     const d = await r.json().catch(() => ({}) as { text?: string; error?: string })
     if (!r.ok) {

@@ -5,9 +5,8 @@
   (Estudar, Trabalhos, Provas), abaixo do campo.
 
   Nesta versão os atalhos mostram nome + explicação FIXOS pra quem não tem
-  sugestão personalizada ainda. Trabalhos e Provas ainda não têm
-  funcionalidade: clicar neles abre um aviso "em breve" com o que está
-  planejado.
+  sugestão personalizada ainda. Provas ainda não tem funcionalidade: clicar
+  nele abre um aviso "em breve" com o que está planejado.
 
   Sidebar: no DESKTOP fica escondida aqui (tela cheia, sem coluna lateral) —
   só reaparece ao entrar numa área de trabalho (Chat/Estudar). No MOBILE
@@ -80,14 +79,7 @@ const ATALHOS: Atalho[] = [
 
 // Conteúdo do modal "em breve" — o que cada função vai fazer quando pronta
 // (lista de verdade o que está planejado, não é só um aviso genérico).
-const EM_BREVE: Record<'trabalhos' | 'provas', { titulo: string; descricao: string }> = {
-  trabalhos: {
-    titulo: 'Trabalhos com ABNT — em breve',
-    descricao:
-      'Você vai poder contar o tema e os requisitos, o Astrodny propõe o sumário, escreve ' +
-      'seção por seção com você aprovando ou ajustando cada uma, e entrega o trabalho pronto, ' +
-      'formatado em ABNT (.docx/.pdf) — sem perder nota por causa de margem ou citação errada.',
-  },
+const EM_BREVE: Record<'provas', { titulo: string; descricao: string }> = {
   provas: {
     titulo: 'Provas — em breve',
     descricao:
@@ -112,7 +104,7 @@ function Painel() {
   const [menuAberto, setMenuAberto] = useState(false)
   const [texto, setTexto] = useState('')
   const [focado, setFocado] = useState(false) // campo em foco? abre pra largura total
-  const [emBreve, setEmBreve] = useState<'trabalhos' | 'provas' | null>(null)
+  const [emBreve, setEmBreve] = useState<'provas' | null>(null)
   const [insights, setInsights] = useState<InsightsPainel | null>(null)
   const [carregandoInsights, setCarregandoInsights] = useState(false)
   // cartão de perfil: foto (logado) abre o modal da conta; sem login, mostra
@@ -190,6 +182,7 @@ function Painel() {
 
   function clicarAtalho(chave: ChaveAtalho) {
     if (chave === 'estudar') navigate('/estudar')
+    else if (chave === 'trabalhos') navigate('/trabalhos')
     else setEmBreve(chave)
   }
 
