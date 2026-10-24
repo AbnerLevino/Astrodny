@@ -67,11 +67,29 @@ export type ExercicioCodigo = {
   pontosChave: string[] // o que o código PRECISA fazer pra estar correto
 }
 
-// um bloco da aula: um pedaço do conteúdo (parágrafos) + 1 pergunta pra fixar.
+// Uma TABELA estruturada — usada quando o ensino precisa comparar valores (ex.: estado
+// ANTES/DEPOIS de uma normalização). É um tipo PRÓPRIO, não markdown dentro de uma
+// string: pedir pro modelo escrever "\n" corretamente dentro de uma string JSON é
+// frágil (ele tende a achatar tudo numa linha só, virando texto cru na tela — bug real
+// que vimos). Como array de strings, uma tabela estruturada NUNCA precisa de newline
+// escapado, então não tem como quebrar. A tela desenha a tabela de verdade a partir
+// destes campos (ver StudySession.tsx) — não há parsing de markdown envolvido.
+export type TabelaConteudo = {
+  tipo: 'tabela'
+  cabecalho: string[]
+  linhas: string[][]
+  legenda?: string // rótulo opcional acima da tabela (ex.: "Exemplo", "Antes e depois")
+}
+
+// um item de "conteudo": OU um parágrafo (string, com markdown simples — negrito,
+// listas, código) OU uma tabela estruturada (ver acima).
+export type ConteudoItem = string | TabelaConteudo
+
+// um bloco da aula: um pedaço do conteúdo (parágrafos/tabelas) + 1 pergunta pra fixar.
 // `exercicioCodigo` é OPCIONAL e aditivo — ver tipo acima.
 export type Block = {
   titulo: string
-  conteudo: string[]
+  conteudo: ConteudoItem[]
   pergunta: Question
   exercicioCodigo?: ExercicioCodigo
 }
@@ -140,6 +158,14 @@ export type ResultadoProvaDiscursiva = {
   correcoes: CorrecaoDiscursiva[] // uma por questão, na ordem da prova
 }
 
+// onde o aluno parou numa sessão que ainda não terminou a prova (ver Sidebar >
+// Sessões de Estudos — "continuar de onde parou"). `null` em `StudySalvo.progresso`
+// significa sessão concluída (tem `resultado`); os dois nunca coexistem.
+export type ProgressoAula = {
+  blocoAtual: number
+  totalBlocos: number
+}
+
 // um estudo SALVO no histórico: o estudo em si + como você foi + de onde veio.
 // Guarda o resultado inteiro (desempenho + erros) — matéria-prima pra futura área
 // de comparação e pra IA indicar o que revisar.
@@ -147,8 +173,10 @@ export type ResultadoProvaDiscursiva = {
 // vira `ResultadoProva | ResultadoProvaDiscursiva`. Por ora segue só o MC.
 export type StudySalvo = {
   id: string
-  data: string // data ISO de quando foi feito
+  data: string // data ISO de quando foi feito (ou tocado pela última vez)
   origem: string // nome(s) do(s) PDF(s) que geraram o estudo
+  materia: string // categoria escolhida pelo aluno (ver domain/perfil Perfil.materias)
   estudo: Study
-  resultado: ResultadoProva
+  resultado: ResultadoProva | null // null enquanto a sessão ainda está em andamento
+  progresso: ProgressoAula | null // null quando já concluiu (resultado preenchido)
 }

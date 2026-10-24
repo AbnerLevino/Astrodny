@@ -6,7 +6,7 @@
   local falhava: num schema grande, ele "esquecia" a prova no fim e derrubava o estudo
   inteiro. Separando, a prova vira responsabilidade de quem a monta bem.
 
-  Não sabe se a IA é Groq, Ollama ou mock — fala só pela porta AIProvider.
+  Não sabe se a IA é Groq, Gemini ou mock — fala só pela porta AIProvider.
 
   FALLBACK (nunca travar): se a IA falhar — sem chave, offline (ex.: faculdade sem
   internet), limite estourado ou schema torto após os retries — a prova é DERIVADA dos

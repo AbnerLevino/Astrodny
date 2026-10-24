@@ -4,14 +4,15 @@
   Ignora o prompt e devolve sempre o mesmo JSON de estudo, simulando o texto que
   um modelo real responderia. Um pequeno atraso finge o "pensar".
 
-  Serve pra construir e testar todo o app de graça, sem IA de verdade. Na Fase 1
-  criamos um `ollamaProvider` com esta mesma interface e trocamos um pelo outro.
+  Serve pra construir e testar todo o app de graça, sem IA de verdade. Os providers
+  reais (groqProvider, geminiProvider etc.) têm essa mesma interface — trocar é só
+  trocar o adaptador.
 */
 import type { AIProvider, GenerateOptions, PromptInput } from '../../application/ports/AIProvider'
 
 // Resposta MOCK do CHAT (só pra testar o front). Antes vivia dentro da ui/chats.tsx —
 // mudou de casa pra cá, que é o lugar do "detalhe" (o que a IA responde). Quando
-// plugarmos o Ollama, este texto some e a resposta vem do modelo de verdade.
+// plugamos um provider real, este texto some e a resposta vem do modelo de verdade.
 const RESPOSTA_MOCK = `Java é uma **linguagem de programação orientada a objetos**, criada pela Sun Microsystems em 1995 (hoje mantida pela Oracle). A ideia central dela é o famoso lema **"escreva uma vez, rode em qualquer lugar"**: o código Java é compilado para um formato intermediário (**bytecode**) que roda dentro da **Máquina Virtual Java (a JVM)**, então o mesmo programa funciona em Windows, Linux ou Mac sem reescrever nada.
 
 Ela é **fortemente tipada** e orientada a objetos, o que significa que você organiza o programa em **classes e objetos** — cada um com seus dados (atributos) e comportamentos (métodos). Isso ajuda a manter projetos grandes organizados e reaproveitáveis, usando pilares como **herança, encapsulamento e polimorfismo**.
@@ -79,7 +80,7 @@ const ESTUDO_JSON = {
 
 export const mockProvider: AIProvider = {
   // `_opcoes` (json) é ignorado aqui: o mock já devolve JSON sempre. Quem realmente
-  // usa essa flag é o ollamaProvider, pra ligar o `format:"json"` do modelo real.
+  // usa essa flag são os providers reais (ex.: groqProvider), pra pedir JSON garantido.
   async generate(_prompt: PromptInput, _opcoes?: GenerateOptions): Promise<string> {
     // finge o tempo de "pensar" do modelo
     await new Promise((resolve) => setTimeout(resolve, 400))
@@ -89,7 +90,7 @@ export const mockProvider: AIProvider = {
 
   // `async function*` = GERADOR ASSÍNCRONO: produz valores ao longo do tempo.
   // Cada `yield` entrega um pedaço e PAUSA até o consumidor (o `for await`) pedir o
-  // próximo. É exatamente o que o Ollama faz — só que os pedaços virão da rede.
+  // próximo. É exatamente o que um provider real faz — só que os pedaços vêm da rede.
   async *generateStream(_prompt: PromptInput): AsyncIterable<string> {
     await esperar(TEMPO_PENSANDO) // fase "pensando" antes do primeiro pedaço
     const palavras = RESPOSTA_MOCK.split(' ')

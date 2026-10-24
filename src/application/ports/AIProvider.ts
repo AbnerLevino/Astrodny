@@ -4,14 +4,14 @@
   A camada de aplicação (o método) fala com um modelo APENAS por este contrato:
   manda um texto (prompt), recebe um texto (a resposta).
 
-  Quem IMPLEMENTA isto vive na infraestrutura (mockProvider, futuro ollamaProvider).
+  Quem IMPLEMENTA isto vive na infraestrutura (mockProvider, groqProvider, geminiProvider...).
   Trocar o fornecedor = trocar o adaptador. A aplicação não muda.
 */
 import type { Personalidade } from '../../domain/settings'
 import type { Perfil } from '../../domain/perfil'
 import type { ContextoEstudo } from '../../domain/studyChat'
 // Opções de uma geração. `json: true` pede pro modelo devolver JSON VÁLIDO
-// (no Ollama vira `format:"json"`). Usada pelo Estudo pra proteger o parse.
+// (no Groq vira `response_format: json_object`). Usada pelo Estudo pra proteger o parse.
 // Opcional: o Chat não passa nada e recebe texto livre.
 //
 // `reasoningEffort`/`maxCompletionTokens`: só o Groq (modelos de raciocínio tipo
@@ -26,7 +26,7 @@ export type GenerateOptions = {
 }
 
 // Uma mensagem de CONVERSA com papel (role) explícito — é como toda API de chat de
-// verdade (OpenAI/Groq/Cloudflare/Gemini/Ollama) entende contexto: 'system' é a
+// verdade (OpenAI/Groq/Cloudflare/Gemini) entende contexto: 'system' é a
 // instrução fixa (quem o tutor é), 'user'/'assistant' são os turnos da conversa.
 // Antes o Chat colava tudo isso num texto único; modelos maiores tratam melhor
 // quando o 'system' chega separado da conversa (ver prompts.ts/chat.ts).
@@ -66,10 +66,10 @@ export interface AIProvider {
 
   // Resposta em PEDAÇOS (stream), conforme o modelo vai gerando. Usada pelo Chat,
   // pro efeito "digitando" ser real. AsyncIterable = "vou te entregando fatia por
-  // fatia"; quem consome usa `for await`. É assim que o Ollama responde de verdade.
+  // fatia"; quem consome usa `for await`. É assim que os modelos reais respondem.
   //
   // `meta` é OPCIONAL e aditivo: só o `proxyProvider` (quem fala com o nosso backend)
   // usa, pra mandar os INGREDIENTES do system prompt em vez do texto pronto — os
-  // providers locais (ollama/mock/groq/fallback/retry) ignoram e continuam iguais.
+  // demais providers (mock/groq/fallback/retry) ignoram e continuam iguais.
   generateStream(prompt: PromptInput, meta?: ChatMeta): AsyncIterable<string>
 }

@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useChats } from '../chats'
 import type { Chat } from '../../domain/chat'
-import { useStudies } from '../studies'
 import { useAuth, type Usuario } from '../auth'
 import PerfilModal from './PerfilModal'
+import FotoPerfil from '../components/FotoPerfil'
 
 /*
   Menu lateral. DOIS comportamentos, por tamanho de tela:
@@ -24,7 +24,6 @@ function Sidebar({
   aoSelecionar,
   apenasDesktop = false,
   escondidoNoDesktop = false,
-  aoAuroraHover,
 }: {
   aoSelecionar: () => void
   apenasDesktop?: boolean
@@ -32,12 +31,8 @@ function Sidebar({
   // não aparece como coluna (o Painel não tem Sidebar fixa; ela volta nas
   // áreas de trabalho, como Chat e Estudar).
   escondidoNoDesktop?: boolean
-  // dispara a aurora de fundo da página inteira enquanto o mouse está sobre o CTA
-  // "Descubra o Astro!" (Home escuta e revela o fundo-aurora atrás do conteúdo)
-  aoAuroraHover?: (ativo: boolean) => void
 }) {
   const { chats, chatAtivoId, renomearChat, alternarFixar, excluirChat } = useChats()
-  const { estudos } = useStudies()
   const { usuario, perfil, onboardingPendente, salvarPerfil, entrar, sair } = useAuth()
   const navigate = useNavigate()
 
@@ -45,10 +40,8 @@ function Sidebar({
   const [modalAberto, setModalAberto] = useState(false)
   // controla o FORMULÁRIO de perfil (nome/curso/matérias/nível) — maior, tela própria
   const [perfilModalAberto, setPerfilModalAberto] = useState(false)
-  // controla o modal cheio "Descubra o Astro!" (chamariz de login pra quem é visitante)
-  const [descubraAberto, setDescubraAberto] = useState(false)
-  // Provas e Tarefas ainda não têm tela própria — mesmo aviso "em breve" do Painel
-  const [emBreve, setEmBreve] = useState<'provas' | 'tarefas' | null>(null)
+  // Provas e Cronograma ainda não têm tela própria — mesmo aviso "em breve" do Painel
+  const [emBreve, setEmBreve] = useState<'provas' | 'cronograma' | null>(null)
 
   // Onboarding automático: loga e falta o curso → abre o formulário sozinho,
   // uma vez (o aluno pode fechar com "Agora não"; reaparece no próximo login
@@ -102,40 +95,17 @@ function Sidebar({
       <nav className="flex flex-col gap-1 p-4 pt-[max(1.5rem,env(safe-area-inset-top))] lg:gap-0 lg:p-3 lg:pt-[max(1.25rem,env(safe-area-inset-top))]">
         <ItemMenu label="Home" icone={<IconeHome />} onClick={() => irPara('/')} />
         <ItemMenu label="Novo Chat" icone={<IconeChat />} onClick={() => abrir(null)} />
-        <ItemMenu label="Trabalhos" icone={<IconeEstrelaCadente />} onClick={() => irPara('/trabalhos')} />
+        <ItemMenu label="Sessões de Estudos" icone={<IconeLivro />} onClick={() => irPara('/sessoes')} />
         <ItemMenu label="Provas" icone={<IconeLua />} onClick={() => setEmBreve('provas')} />
-        <ItemMenu label="Tarefas" icone={<IconeConstelacao />} onClick={() => setEmBreve('tarefas')} />
-
-        {/* separação pequena (só espaço, sem linha) antes do grupo de organização */}
-        <div className="h-2 lg:h-1.5" aria-hidden="true" />
-
-        <ItemMenu label="Projetos" icone={<IconeLivro />} />
-        <ItemMenu label="Cronogramas" icone={<IconeCalendario />} />
+        <ItemMenu label="Trabalhos" icone={<IconeEstrelaCadente />} onClick={() => irPara('/trabalhos')} />
+        <ItemMenu label="Cronograma" icone={<IconeCalendario />} onClick={() => setEmBreve('cronograma')} />
       </nav>
 
       {/* separação em linha antes do histórico */}
       <div className="mx-4 border-t border-white/10 lg:mx-3" aria-hidden="true" />
 
-      {/* histórico de estudos e de chats (rola quando tiver muitos) */}
+      {/* histórico de chats (rola quando tiver muitos) */}
       <div className="flex-1 overflow-y-auto px-4 lg:px-3">
-        {/* Estudos feitos: nome + nota + data (só leitura por enquanto) */}
-        {estudos.length > 0 && (
-          <>
-            <p className="px-1 pb-2 pt-1 text-xs uppercase tracking-wide text-white/40">Estudos</p>
-            <div className="mb-4 flex flex-col gap-1">
-              {estudos.map((e) => (
-                <div key={e.id} className="rounded-lg px-3 py-2">
-                  <p className="truncate text-sm text-white/90">{e.estudo.nome}</p>
-                  <p className="text-xs text-white/50">
-                    {e.resultado.acertos}/{e.resultado.total} acertos ·{' '}
-                    {new Date(e.data).toLocaleDateString('pt-BR')}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
         {chats.length > 0 && (
           <p className="px-1 pb-2 pt-1 text-xs uppercase tracking-wide text-white/40">Histórico</p>
         )}
@@ -181,7 +151,7 @@ function Sidebar({
             É um <div> (não button): dentro há botões irmãos (avatar/nome e o CTA). */}
         <div className="flex w-full items-center gap-3.5 rounded-3xl border border-transparent p-3 transition-all duration-300 ease-out hover:-translate-y-0.5 hover:scale-[1.02] hover:border-white/25 hover:bg-white/5 lg:gap-3">
           <button type="button" onClick={() => setModalAberto(true)} aria-label="Abrir conta" className="shrink-0">
-            <img src="/perfil.png" alt="" className="h-16 w-16 rounded-full object-cover lg:h-14 lg:w-14" />
+            <FotoPerfil foto={usuario?.foto} className="h-16 w-16 rounded-full lg:h-14 lg:w-14" />
           </button>
           <div className="min-w-0 flex-1 font-sans leading-tight">
             <button
@@ -214,24 +184,6 @@ function Sidebar({
               ))}
           </div>
         </div>
-
-        {/* CTA "Descubra o Astro!": pro visitante, ABAIXO do cartão de
-            perfil, centralizado. */}
-        {!usuario && (
-          <button
-            type="button"
-            onClick={() => setDescubraAberto(true)}
-            onMouseEnter={() => aoAuroraHover?.(true)}
-            onMouseLeave={() => aoAuroraHover?.(false)}
-            className="aurora-btn mx-auto mt-3 flex w-fit max-w-full items-center justify-center gap-2 rounded-full bg-white/20 px-4 py-2 text-base font-medium text-white/90 [&_svg]:h-5 [&_svg]:w-5 lg:py-1.5 lg:text-sm lg:[&_svg]:h-[18px] lg:[&_svg]:w-[18px]"
-          >
-            <span className="aurora-brilho" aria-hidden="true" />
-            <span className="relative z-10 inline-flex items-center gap-2 whitespace-nowrap">
-              <IconeEstrelas />
-              Descubra o Astro!
-            </span>
-          </button>
-        )}
       </div>
 
       {/* modal da conta */}
@@ -260,14 +212,6 @@ function Sidebar({
           onboarding={onboardingPendente}
           aoSalvar={salvarPerfil}
           aoFechar={() => setPerfilModalAberto(false)}
-        />
-      )}
-
-      {/* modal cheio: "Descubra o Astro!" — chamariz de login pra visitante */}
-      {descubraAberto && (
-        <ModalDescubraAstro
-          aoEntrar={entrar}
-          aoFechar={() => setDescubraAberto(false)}
         />
       )}
 
@@ -476,7 +420,7 @@ function BotaoMenuChat({
 }
 
 // conteúdo do aviso "em breve" dos itens novos do menu que ainda não têm tela
-const EM_BREVE_SIDEBAR: Record<'provas' | 'tarefas', { titulo: string; descricao: string }> = {
+const EM_BREVE_SIDEBAR: Record<'provas' | 'cronograma', { titulo: string; descricao: string }> = {
   provas: {
     titulo: 'Provas — em breve',
     descricao:
@@ -484,11 +428,11 @@ const EM_BREVE_SIDEBAR: Record<'provas' | 'tarefas', { titulo: string; descricao
       'registrados, várias tentativas e explicação de cada resposta — pra treinar pra prova ' +
       'ou concurso igual quem já sabe o conteúdo, só precisa de ritmo e repertório.',
   },
-  tarefas: {
-    titulo: 'Tarefas — em breve',
+  cronograma: {
+    titulo: 'Cronograma — em breve',
     descricao:
-      'Uma lista das suas pendências (entregas, leituras, exercícios) com prazo e aviso perto ' +
-      'da data — pra não depender de lembrar de cabeça o que falta fazer.',
+      'Suas aulas, provas e entregas organizadas num calendário único — pra não depender de ' +
+      'lembrar de cabeça o que vem a seguir.',
   },
 }
 
@@ -651,19 +595,6 @@ function IconeLua() {
   )
 }
 
-// Tarefas: constelação — pontos (pendências) ligados numa trajetória ascendente
-function IconeConstelacao() {
-  return (
-    <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M5 17.5l4-5.5 5 2.5 5-8" />
-      <circle cx="5" cy="17.5" r="1.3" fill="currentColor" stroke="none" />
-      <circle cx="9" cy="12" r="1.3" fill="currentColor" stroke="none" />
-      <circle cx="14" cy="14.5" r="1.3" fill="currentColor" stroke="none" />
-      <circle cx="19" cy="6.5" r="1.3" fill="currentColor" stroke="none" />
-    </svg>
-  )
-}
-
 function IconeSliders() {
   return (
     <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
@@ -706,18 +637,23 @@ export function ModalPerfil({
   }, [aoFechar])
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center lg:items-center" role="dialog" aria-modal="true">
-      {/* fundo escurecido — toque fecha */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={aoFechar} />
+    // MOBILE: bottom-sheet centralizado, com véu escuro atrás (fecha ao tocar fora).
+    // DESKTOP (lg+): vira um POPOVER ancorado em cima do cartão de perfil da Sidebar
+    // (que fica no canto inferior esquerdo) — por isso troca o `flex items-center`
+    // (modal no meio da tela) por posicionamento absoluto perto do cartão, sem véu
+    // escurecendo o resto da tela (só um fundo clicável, pra fechar ao tocar fora).
+    <div className="fixed inset-0 z-[60] flex items-end justify-center lg:block" role="dialog" aria-modal="true">
+      {/* fundo — no mobile escurece/borra; no desktop é só a área clicável de fechar */}
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm lg:bg-transparent lg:backdrop-blur-none" onClick={aoFechar} />
 
       {/* painel */}
-      <div className="animar-subida relative z-10 w-full border border-white/10 bg-[#141416] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] text-white rounded-t-3xl lg:w-[22rem] lg:rounded-3xl">
+      <div className="animar-subida relative z-10 w-full border border-white/10 bg-[#141416] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] text-white rounded-t-3xl lg:absolute lg:bottom-28 lg:left-4 lg:w-[239px] lg:rounded-3xl lg:shadow-2xl lg:shadow-black/50">
         {/* puxador (só no mobile) */}
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/20 lg:hidden" />
 
         {/* cabeçalho: quem está logado (ou "visitante", pra quem usa anônimo) */}
         <div className="flex items-center gap-3 px-1 pb-3">
-          <img src="/perfil.png" alt="" className="h-12 w-12 shrink-0 rounded-full object-cover" />
+          <FotoPerfil foto={usuario?.foto} className="h-12 w-12 shrink-0 rounded-full" />
           <div className="min-w-0 leading-tight">
             <p className="truncate font-semibold">{usuario ? usuario.nome : 'Visitante'}</p>
             <p className={`text-sm ${plano === 'free' ? 'text-[#f0c75e]' : 'text-white/50'}`}>
@@ -749,119 +685,24 @@ export function ModalPerfil({
             />
           ) : (
             <ItemModal
-              icone={<IconeSair />}
+              icone={<IconeGoogle />}
               label="Entrar com Google"
               onClick={() => {
+                // aoEntrar() redireciona pro Google — a tela só muda DEPOIS do
+                // redirecionamento. Mas se o Supabase não estiver configurado
+                // (ou o provedor falhar antes de redirecionar), o erro não pode
+                // sumir em silêncio — por isso o catch + aviso aqui.
                 aoEntrar()
-                aoFechar()
+                  .then(() => aoFechar())
+                  .catch((e: unknown) => {
+                    window.alert(e instanceof Error ? e.message : 'Não foi possível entrar com o Google.')
+                  })
               }}
             />
           )}
         </nav>
       </div>
     </div>
-  )
-}
-
-/* ===== modal "Descubra o Astro!" =====
-   Chamariz de login pro visitante (sem conta). Tela CHEIA tanto no mobile
-   quanto no desktop (sem bottom-sheet, sem cartão centralizado) — diferente
-   do ModalPerfil, porque aqui é uma explicação, não uma lista de opções.
-   Design provisório: ainda vamos refinar o visual. */
-export function ModalDescubraAstro({
-  aoEntrar,
-  aoFechar,
-}: {
-  aoEntrar: () => Promise<void>
-  aoFechar: () => void
-}) {
-  useEffect(() => {
-    function aoTeclar(e: KeyboardEvent) {
-      if (e.key === 'Escape') aoFechar()
-    }
-    window.addEventListener('keydown', aoTeclar)
-    return () => window.removeEventListener('keydown', aoTeclar)
-  }, [aoFechar])
-
-  return (
-    <div className="fixed inset-0 z-[90] flex flex-col lg:flex-row" role="dialog" aria-modal="true">
-      {/* ESQUERDA (desktop) / tela cheia (mobile): painel branco com ícone,
-          título, descrição e botões, tudo centralizado. No mobile ocupa a tela
-          inteira, sem a faixa de aurora; no desktop fica mais estreito que ela. */}
-      <div className="relative flex flex-1 flex-col items-center overflow-hidden bg-white px-6 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] text-center text-[#141416] lg:w-[35%] lg:flex-none lg:px-12">
-        {/* estrelinhas decorativas espalhadas pelo painel, atrás do conteúdo */}
-        <EstrelasDecorativas />
-
-        <div className="relative z-10 flex w-full justify-end">
-          <button
-            type="button"
-            onClick={aoFechar}
-            aria-label="Fechar"
-            className="rounded-full p-2 text-black/50 transition-colors hover:bg-black/5 hover:text-black"
-          >
-            <IconeFechar />
-          </button>
-        </div>
-
-        <div className="relative z-10 flex flex-1 flex-col items-center justify-center">
-          {/* ícone + título na MESMA linha — centralizado no mobile, alinhado
-              à direita no desktop (lg:) */}
-          <div className="flex w-full max-w-md items-center justify-center gap-3 self-center lg:justify-end lg:self-end">
-            <span className="shrink-0 [&>svg]:h-9 [&>svg]:w-9 [&>svg]:text-[#c99a2e] lg:[&>svg]:h-10 lg:[&>svg]:w-10">
-              <IconeUniverso />
-            </span>
-            <h2 className="text-center text-2xl font-bold lg:text-right lg:text-3xl">Descubra o Astro!</h2>
-          </div>
-          <p className="mt-3 max-w-md self-center text-center text-[15px] leading-relaxed text-black/65 lg:self-end lg:text-right">
-            Com o Google, o Astrodny lembra do seu curso e das suas matérias, sugere assuntos no
-            chat e te avisa das provas. Muito mais do que um simples professor:
-            <br />
-            <span className="brilho-aurora font-semibold">ele te guia pelas estrelas.</span>
-          </p>
-
-          {/* SÓ os botões ficam centralizados — self-center sobrescreve o self-end acima */}
-          <div className="mt-8 flex w-full max-w-xs flex-col gap-3 self-center">
-            <button
-              type="button"
-              onClick={() => {
-                aoEntrar()
-                aoFechar()
-              }}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-black/15 bg-white px-5 py-3 text-[15px] font-semibold text-black shadow-sm transition-transform hover:scale-[1.02]"
-            >
-              <IconeGoogle />
-              Entrar com Google
-            </button>
-            <button
-              type="button"
-              onClick={aoFechar}
-              className="rounded-full px-5 py-2.5 text-sm font-medium text-black/50 transition-colors hover:text-black"
-            >
-              Sair
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* DIREITA (só desktop): a aurora, sem véu escuro — identidade visual do
-          Astrodny. No mobile some de vez: o painel branco vira tela cheia. */}
-      <div className="relative hidden overflow-hidden lg:block lg:flex-1">
-        <div className="fundo-aurora absolute inset-0 brightness-110">
-          <span className="blob blob-1" />
-          <span className="blob blob-2" />
-          <span className="blob blob-3" />
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// X (fechar) — usado no modal "Descubra o Astro!"
-function IconeFechar() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M18 6L6 18M6 6l12 12" />
-    </svg>
   )
 }
 
@@ -968,83 +809,6 @@ function IconeEstrelas() {
       <path d="M11 2.5l1.7 4 4 1.7-4 1.7L11 13.9l-1.7-4L5.3 8.2l4-1.7z" />
       <path d="M18.5 13l.85 2 2 .85-2 .85-.85 2-.85-2-2-.85 2-.85z" />
     </svg>
-  )
-}
-
-// Universo: planeta com anel (como o Saturno) e duas luas — usado no "Descubra
-// o Astro!" no lugar das estrelinhas, pra passar a ideia de "universo" mesmo.
-function IconeUniverso() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="11" cy="12.5" r="4.6" />
-      <ellipse cx="11" cy="12.5" rx="9.6" ry="3" transform="rotate(-22 11 12.5)" />
-      <circle cx="20" cy="5.5" r="1.3" fill="currentColor" stroke="none" />
-      <circle cx="4" cy="18.5" r="0.9" fill="currentColor" stroke="none" />
-    </svg>
-  )
-}
-
-// sorteia um número entre min e max
-function aleatorio(min: number, max: number) {
-  return min + Math.random() * (max - min)
-}
-
-// Estrelinhas espalhadas pelo painel branco do "Descubra o Astro!" — puro
-// enfeite, atrás do conteúdo (z-0) e sem interceptar cliques. Posições
-// sorteadas a cada vez que o modal abre, mas só dentro de três "faixas
-// livres" (topo, borda esquerda e rodapé) — ali o ícone+título (à direita)
-// e os botões (centralizados) nunca passam, então nenhuma estrela fica
-// escondida atrás de conteúdo.
-function EstrelasDecorativas() {
-  const estrelas = useMemo(() => {
-    const total = 18
-    return Array.from({ length: total }, () => {
-      // sorteia qual das 3 faixas: TOPO (acima do ícone+título), ESQUERDA
-      // (fora do texto, que é à direita, e fora dos botões, centralizados)
-      // ou RODAPÉ (abaixo dos botões)
-      const r = Math.random()
-      const [top, left] =
-        r < 0.4
-          ? [aleatorio(2, 14), aleatorio(4, 94)] // topo
-          : r < 0.75
-            ? [aleatorio(16, 87), aleatorio(2, 13)] // esquerda
-            : [aleatorio(90, 98), aleatorio(4, 94)] // rodapé, abaixo dos botões
-      return {
-        top: `${top}%`,
-        left: `${left}%`,
-        tamanho: Math.round(aleatorio(14, 30)),
-        opacidade: Number(aleatorio(0.55, 0.85).toFixed(2)),
-        duracao: Number(aleatorio(1.8, 4.5).toFixed(2)),
-        atraso: Number(aleatorio(0, 4).toFixed(2)),
-      }
-    })
-  }, [])
-
-  return (
-    <div className="pointer-events-none absolute inset-0 z-0 text-[#c99a2e]" aria-hidden="true">
-      {estrelas.map((e, i) => (
-        <svg
-          key={i}
-          className="estrela-piscante absolute"
-          style={
-            {
-              top: e.top,
-              left: e.left,
-              width: e.tamanho,
-              height: e.tamanho,
-              '--brilho-max': e.opacidade,
-              animationDuration: `${e.duracao}s`,
-              animationDelay: `${e.atraso}s`,
-            } as CSSProperties
-          }
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          stroke="none"
-        >
-          <path d="M11 2.5l1.7 4 4 1.7-4 1.7L11 13.9l-1.7-4L5.3 8.2l4-1.7z" />
-        </svg>
-      ))}
-    </div>
   )
 }
 

@@ -7,17 +7,17 @@
     AQUI MESMO, no lugar da saudação. Nada de tela separada.
   Tocar na foto de perfil abre o menu lateral (Sidebar).
 */
-import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type DragEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Sidebar from './Sidebar'
+import FotoPerfil from '../components/FotoPerfil'
+import { TextoIA, BotaoCopiar } from '../components/ChatTexto'
 import { AbasFluxo } from '../abas'
+import { useAuth } from '../auth'
 import { useChats, type Anexo } from '../chats'
 import { extrairAcao } from '../../application/chatAction'
 import { extractContent } from '../../application/extractContent'
 import { pdfExtractor } from '../../infrastructure/documents/pdfExtractor'
-import ReactMarkdown, { type Components } from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import rehypeHighlight from 'rehype-highlight'
 
 const ALTURA_MAX = 160 // teto do campo (px): passou disso, rola em vez de crescer
 // status "pensando" (fake por enquanto; depois refletem as fases reais da IA)
@@ -38,12 +38,10 @@ function saudacao(): string {
 
 function Conversa() {
   const navigate = useNavigate()
+  const { usuario } = useAuth()
   // :id da rota /chat/:id — ausente em /chat (chat em branco, mostra a saudação)
   const { id } = useParams<{ id: string }>()
   const [menuAberto, setMenuAberto] = useState(false)
-  // true enquanto o mouse está sobre o CTA "Descubra o Astro!" (visitante, sem
-  // login) na Sidebar — revela a aurora de fundo por baixo do véu escuro.
-  const [auroraAtiva, setAuroraAtiva] = useState(false)
   const [texto, setTexto] = useState('')
   const [focado, setFocado] = useState(false) // campo em foco? controla a expansão/descida do composer
   const [statusIdx, setStatusIdx] = useState(0)
@@ -51,11 +49,9 @@ function Conversa() {
   const fimRef = useRef<HTMLDivElement>(null)
 
   // ===== Anexos (Spec C: mini-aula via PDF no chat) =====
-  // modalAberto = o "+" ao lado do enviar, com (por ora) só "Adicionar arquivos".
   // arrastando = feedback visual enquanto um arquivo é arrastado sobre a tela (desktop).
   // anexos é LISTA: dá pra anexar mais de um, cada um vira um quadradinho numa
   // fileira (rolável) acima do input — sem ocupar a largura toda do placeholder.
-  const [modalAberto, setModalAberto] = useState(false)
   const [arrastando, setArrastando] = useState(false)
   const [anexos, setAnexos] = useState<AnexoPendente[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -83,7 +79,6 @@ function Conversa() {
   }
 
   function abrirSeletorArquivo() {
-    setModalAberto(false)
     fileInputRef.current?.click()
   }
 
@@ -182,7 +177,7 @@ function Conversa() {
           <p className="text-lg font-semibold text-white">Solte o arquivo pra anexar</p>
         </div>
       )}
-      <Sidebar aoSelecionar={() => setMenuAberto(false)} aoAuroraHover={setAuroraAtiva} />
+      <Sidebar aoSelecionar={() => setMenuAberto(false)} />
 
       <div
         className={`relative z-10 min-h-dvh transition-all duration-300 lg:flex-1 lg:translate-x-0 lg:blur-none ${menuAberto ? 'translate-x-[78%] blur-[2px]' : 'translate-x-0'}`}
@@ -195,15 +190,14 @@ function Conversa() {
         </div>
         {/* camada escura que surge quando há conversa ativa (troca animada).
             NÃO cobre 100%: fica semitransparente pra a aurora continuar aparecendo
-            por baixo, só que bem mais fraca. Na home (sem chat) ela some e a aurora
-            volta no talo. Some também (opacity-0) enquanto auroraAtiva: é o gatilho
-            do hover no CTA "Descubra o Astro!", que acende a aurora cheia da página. */}
+            por baixo, só que bem mais fraca. Na home (sem chat) ela some e a
+            aurora volta no talo. */}
         <div
-          className={`absolute inset-0 -z-20 bg-[#1e1f24] transition-opacity duration-500 ${auroraAtiva ? 'opacity-0' : chatAtivo ? 'opacity-[0.82] lg:opacity-[0.85]' : 'opacity-0'}`}
+          className={`absolute inset-0 -z-20 bg-[#1e1f24] transition-opacity duration-500 ${chatAtivo ? 'opacity-[0.82] lg:opacity-[0.85]' : 'opacity-0'}`}
         />
         {/* camada CINZA que surge com fade ao abrir o menu */}
         <div
-          className={`absolute inset-0 -z-10 bg-[#2e2f36] transition-opacity duration-300 ${!auroraAtiva && menuAberto ? 'opacity-100' : 'opacity-0'}`}
+          className={`absolute inset-0 -z-10 bg-[#2e2f36] transition-opacity duration-300 ${menuAberto ? 'opacity-100' : 'opacity-0'}`}
         />
 
         {/* conteudo real, acima das duas camadas de fundo */}
@@ -212,7 +206,7 @@ function Conversa() {
           <header className="absolute top-0 inset-x-0 z-20 flex items-center justify-between px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-2">
             {/* no desktop a sidebar já está sempre visível, então o atalho "foto abre menu" some */}
             <button type="button" aria-label="Abrir menu" onClick={() => setMenuAberto(true)} className="shrink-0 lg:hidden">
-              <img src="/perfil.png" alt="Foto de perfil" className="h-12 w-12 rounded-full object-cover border-2 border-white" />
+              <FotoPerfil foto={usuario?.foto} className="h-12 w-12 rounded-full border-2 border-white" />
             </button>
             <img src="/logo.png" alt="Astrodny" className="h-9 w-auto" />
           </header>
@@ -389,36 +383,20 @@ function Conversa() {
                   className="flex-1 resize-none bg-transparent font-sans text-[18px] lg:text-[15px] leading-6 text-white placeholder:text-white/40 placeholder:text-[14px] outline-none py-1"
                   style={{ maxHeight: ALTURA_MAX }}
                 />
-                {/* "+" ao lado do enviar — abre o modal de opções (por ora só
-                    "Adicionar arquivos"; é aqui que mais opções entram depois). */}
+                {/* "+" ao lado do enviar — abre direto o seletor de arquivos
+                    (única opção hoje; se um dia houver mais, volta a virar menu). */}
                 <div className="relative shrink-0 self-end mb-0.5">
                   <button
                     type="button"
-                    onClick={() => setModalAberto((v) => !v)}
+                    onClick={abrirSeletorArquivo}
                     onMouseDown={(e) => e.preventDefault()}
-                    aria-label="Mais opções"
+                    aria-label="Adicionar arquivos"
                     className="flex h-8 w-8 items-center justify-center rounded-full border border-white/30 text-white/80 transition-colors active:bg-white/10"
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 5v14M5 12h14" />
                     </svg>
                   </button>
-                  {modalAberto && (
-                    <>
-                      {/* backdrop: fecha o modal ao tocar fora */}
-                      <div className="fixed inset-0 z-30" onClick={() => setModalAberto(false)} />
-                      <div className="absolute bottom-full right-0 z-40 mb-2 w-52 overflow-hidden rounded-2xl border border-white/15 bg-[#232428] shadow-xl">
-                        <button
-                          type="button"
-                          onClick={abrirSeletorArquivo}
-                          className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-white/90 active:bg-white/10"
-                        >
-                          <IconeAnexo />
-                          Adicionar arquivos
-                        </button>
-                      </div>
-                    </>
-                  )}
                 </div>
                 {/* mesmo botão troca de função: pensando -> PARAR (quadrado),
                     senão -> ENVIAR (seta). Círculo azul-marinho em CSS. */}
@@ -459,97 +437,6 @@ function Conversa() {
       </div>
     </div>
   )
-}
-
-// Renderiza o texto da IA como MARKDOWN: negrito, títulos, listas, código e tabelas
-// (os modelos grandes usam tudo isso). react-markdown reparse a cada token do streaming,
-// então markdown ainda "aberto" no meio da digitação não quebra a tela. O `components`
-// mapeia cada elemento pro visual do tema escuro, já que não usamos plugin de tipografia.
-const componentesMarkdown: Components = {
-  // Hierarquia com respiro: h1 (título principal da resposta) é o maior; h2/h3 descem
-  // de forma equilibrada. mt generoso separa seções; mb afasta o título do parágrafo.
-  // first:mt-0 evita que o 1º título empurre o topo do balão.
-  h1: ({ children }) => <h2 className="mb-2.5 mt-1 text-xl font-bold leading-snug text-white first:mt-0">{children}</h2>,
-  h2: ({ children }) => <h2 className="mb-4 mt-8 text-[19px] font-bold leading-snug text-white first:mt-0">{children}</h2>,
-  h3: ({ children }) => <h3 className="mb-2.5 mt-6 text-base font-semibold text-white first:mt-0">{children}</h3>,
-  p: ({ children }) => <p className="mb-4 leading-relaxed">{children}</p>,
-  strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
-  em: ({ children }) => <em className="italic">{children}</em>,
-  ul: ({ children }) => <ul className="mb-3.5 ml-4 list-disc space-y-1">{children}</ul>,
-  ol: ({ children }) => <ol className="mb-3.5 ml-4 list-decimal space-y-1">{children}</ol>,
-  li: ({ children }) => <li className="pl-0.5">{children}</li>,
-  a: ({ href, children }) => (
-    <a href={href} target="_blank" rel="noreferrer" className="text-blue-300 underline">{children}</a>
-  ),
-  code: ({ className, children }) => {
-    // bloco = tem linguagem (```js) OU é multilinha; senão é código inline (pílula).
-    const bloco = /language-/.test(className ?? '') || String(children).includes('\n')
-    return bloco ? (
-      <code className={`${className ?? ''} font-mono text-[13px]`}>{children}</code>
-    ) : (
-      <code className="rounded bg-white/10 px-1 py-0.5 font-mono text-[13px]">{children}</code>
-    )
-  },
-  // bloco de código: embrulho relativo pra encaixar o botão de copiar no canto.
-  // O texto puro vem de extrairTexto (os filhos são elementos React, não string).
-  pre: ({ children }) => (
-    <div className="relative mb-2">
-      <BotaoCopiar
-        texto={extrairTexto(children)}
-        titulo="Copiar código"
-        className="absolute right-2 top-2 bg-black/40 backdrop-blur-sm"
-      />
-      <pre className="scroll-chat overflow-x-auto rounded-lg bg-black/40 px-4 py-3 pt-9 text-[13px]">{children}</pre>
-    </div>
-  ),
-  // Tabela "limpa": container arredondado com borda fina, cabeçalho sombreado e só
-  // DIVISÓRIAS HORIZONTAIS (sem grade vertical pesada). Zebra discreta ajuda a ler
-  // linhas largas. overflow-x-auto deixa rolar no celular sem quebrar o layout.
-  table: ({ children }) => (
-    <div className="scroll-chat my-4 overflow-x-auto rounded-xl border border-white/10">
-      <table className="w-full border-collapse text-sm">{children}</table>
-    </div>
-  ),
-  thead: ({ children }) => <thead className="bg-white/[0.06]">{children}</thead>,
-  // :nth-child é por elemento-pai, então o even: só pega as linhas pares do tbody —
-  // a linha do cabeçalho (sozinha no thead) não é afetada.
-  tr: ({ children }) => <tr className="even:bg-white/[0.02]">{children}</tr>,
-  th: ({ children }) => (
-    <th className="whitespace-nowrap border-b border-white/15 px-4 py-3 text-left font-semibold text-white">{children}</th>
-  ),
-  td: ({ children }) => <td className="border-b border-white/[0.07] px-4 py-3 align-top leading-relaxed">{children}</td>,
-  // citação (>): a IA costuma usar pra ENTREGAR um exemplo / texto pronto pra colar.
-  // Em vez da barra lateral (traço grande) + itálico, vira um QUADRO na mesma linguagem
-  // das tabelas (borda fina, cantos arredondados, fundo sutil) com o exemplo DENTRO.
-  // Botão de copiar no canto; o pr-12 reserva o espaço dele.
-  blockquote: ({ children }) => (
-    <div className="relative my-4 overflow-hidden rounded-xl border border-white/10 bg-white/[0.03]">
-      <BotaoCopiar
-        texto={extrairTexto(children)}
-        titulo="Copiar texto"
-        className="absolute right-2 top-2 bg-black/30 backdrop-blur-sm"
-      />
-      {/* neutraliza o mb-4 do <p> interno pra o respiro ficar no padding do quadro:
-          parágrafos internos ganham mb-2, e o último zera. */}
-      <blockquote className="px-4 py-3 pr-12 leading-relaxed text-white/80 [&>p]:mb-2 [&>p:last-child]:mb-0">
-        {children}
-      </blockquote>
-    </div>
-  ),
-}
-
-// Extrai o texto PURO de uma árvore de elementos React (o que o react-markdown
-// monta pra um bloco). Precisamos disso porque o conteúdo de um <pre>/<blockquote>
-// chega como elementos (ex.: <code>…</code>), não como string — e o botão de copiar
-// precisa do texto cru. Percorre recursivamente strings, arrays e props.children.
-function extrairTexto(node: ReactNode): string {
-  if (node == null || typeof node === 'boolean') return ''
-  if (typeof node === 'string' || typeof node === 'number') return String(node)
-  if (Array.isArray(node)) return node.map(extrairTexto).join('')
-  if (typeof node === 'object' && 'props' in node) {
-    return extrairTexto((node as { props: { children?: ReactNode } }).props.children)
-  }
-  return ''
 }
 
 // Ícone de anexo (clipe de papel) — usado no chip de anexo pendente, no item do
@@ -598,76 +485,6 @@ function IconeEstudar() {
       <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15.5a1 1 0 0 1-1 1H6.5A2.5 2.5 0 0 0 4 22Z" />
       <path d="M4 5.5v14A2.5 2.5 0 0 0 6.5 22" />
     </svg>
-  )
-}
-
-// Copia um texto pro clipboard de forma CONFIÁVEL em qualquer contexto.
-// navigator.clipboard só existe em contexto seguro (https/localhost); no celular
-// via IP da LAN (http) ele não está disponível — por isso o fallback com um
-// <textarea> escondido + execCommand('copy'), que funciona no HTTP também.
-async function copiarTexto(texto: string): Promise<boolean> {
-  try {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(texto)
-      return true
-    }
-  } catch {
-    // cai no fallback abaixo
-  }
-  try {
-    const ta = document.createElement('textarea')
-    ta.value = texto
-    ta.style.position = 'fixed'
-    ta.style.top = '-9999px'
-    ta.setAttribute('readonly', '')
-    document.body.appendChild(ta)
-    ta.select()
-    const ok = document.execCommand('copy')
-    document.body.removeChild(ta)
-    return ok
-  } catch {
-    return false
-  }
-}
-
-// Botãozinho de copiar: mostra um ícone de "copiar" e, por ~1,5s após o clique,
-// troca pro "check" como confirmação visual. Usado nas mensagens, blocos de código
-// e citações. `className` deixa cada chamador posicionar/estilizar como precisar.
-function BotaoCopiar({
-  texto,
-  titulo = 'Copiar',
-  className = '',
-}: {
-  texto: string
-  titulo?: string
-  className?: string
-}) {
-  const [copiado, setCopiado] = useState(false)
-  async function clicar() {
-    if (await copiarTexto(texto)) {
-      setCopiado(true)
-      setTimeout(() => setCopiado(false), 1500)
-    }
-  }
-  return (
-    <button
-      type="button"
-      onClick={clicar}
-      aria-label={titulo}
-      title={titulo}
-      className={`flex h-7 w-7 items-center justify-center rounded-md text-white/50 transition-colors active:text-white ${className}`}
-    >
-      {copiado ? (
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M20 6L9 17l-5-5" />
-        </svg>
-      ) : (
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="9" y="9" width="13" height="13" rx="2" />
-          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-        </svg>
-      )}
-    </button>
   )
 }
 
@@ -780,18 +597,6 @@ function MensagemUsuario({
         </button>
       </div>
     </div>
-  )
-}
-
-function TextoIA({ texto }: { texto: string }) {
-  return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      rehypePlugins={[[rehypeHighlight, { detect: true, ignoreMissing: true }]]}
-      components={componentesMarkdown}
-    >
-      {texto}
-    </ReactMarkdown>
   )
 }
 

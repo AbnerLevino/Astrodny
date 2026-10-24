@@ -14,6 +14,7 @@
   A conversa é uma CAMADA DE SUPORTE: ela não avança o estudo nem substitui a aula.
   Perguntar significa apenas "preciso de ajuda agora".
 */
+import type { ConteudoItem } from './study'
 
 // Uma questão que o aluno já respondeu durante o estudo — matéria-prima pra IA
 // entender o que ele já viu e onde escorregou.
@@ -43,7 +44,11 @@ export type ContextoEstudo = {
   material?: string // nome do(s) arquivo(s)/PDF de origem
   blocoIndex: number // índice do bloco em que o aluno está
   blocoTitulo: string // título do bloco atual (ex.: "Cardinalidade")
-  blocoConteudo: string[] // os parágrafos do bloco atual (o recorte relevante)
+  blocoConteudo: ConteudoItem[] // os parágrafos/tabelas do bloco atual (o recorte relevante)
+  // títulos dos OUTROS blocos do estudo (sem o conteúdo deles) — contexto praticamente
+  // de graça: a IA sabe que esses tópicos existem no mesmo estudo e pode referenciá-los
+  // ("isso é do bloco X") sem pagar o custo de mandar o conteúdo inteiro de cada um.
+  outrosBlocosTitulos?: string[]
   perguntaDoBloco?: string // enunciado da pergunta de fixação daquele bloco
   conceitosRelacionados?: string[] // terreno pro futuro (Block ainda não tem isso)
   progresso?: ProgressoEstudo // onde o aluno está no estudo

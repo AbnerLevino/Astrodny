@@ -1,68 +1,55 @@
 /*
   CASO DE USO (application) — gera os insights do Painel (título + 4
-  sugestões) a partir de perfil + estudos + amostra de chats recentes.
+  sugestões) a partir de perfil + histórico de estudos.
 
-  Mesmo padrão do buildStudy: monta o prompt, pede JSON pra porta AIProvider,
-  valida em runtime (um modelo pode errar a forma) e RE-TENTA uma vez antes
-  de desistir.
+  PURA e SEM IA: é texto de boas-vindas/atalho pra tela inicial, gerado a
+  cada visita — não vale o custo (nem a latência) de uma chamada de IA pra
+  isso. Heurística simples sobre dados que já temos localmente.
 */
-import type { AIProvider } from './ports/AIProvider'
 import type { Perfil } from '../domain/perfil'
 import type { StudySalvo } from '../domain/study'
 import type { InsightsPainel, SugestoesPainel } from '../domain/painel'
-import { montarPromptPainel } from './prompts'
-import { comoObjeto, comoLista, comoTexto, comoTextoOuNull } from './validacao'
-import { IALimiteError, ehLimite } from './ports/aiErrors'
 
-const MAX_TENTATIVAS = 2
-const PAUSA_ENTRE_TENTATIVAS_MS = 600
-const dormir = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+function saudacao(hora: number): string {
+  if (hora < 12) return 'Bom dia'
+  if (hora < 18) return 'Boa tarde'
+  return 'Boa noite'
+}
 
-export async function gerarInsightsPainel(
+// taxa de acerto de um estudo CONCLUÍDO (0 a 1)
+function taxaAcerto(e: StudySalvo): number {
+  if (!e.resultado || e.resultado.total === 0) return 1
+  return e.resultado.acertos / e.resultado.total
+}
+
+// entre os N mais recentes, o de PIOR desempenho — candidato a sugestão de revisão
+// (sessões em andamento, sem resultado ainda, não entram)
+function piorDesempenhoRecente(estudos: StudySalvo[]): StudySalvo | null {
+  const recentes = estudos.slice(0, 5).filter((e) => e.resultado && e.resultado.total > 0)
+  if (recentes.length === 0) return null
+  return recentes.reduce((pior, atual) => (taxaAcerto(atual) < taxaAcerto(pior) ? atual : pior))
+}
+
+export function gerarInsightsPainel(
   perfil: Perfil | null,
   estudos: StudySalvo[],
-  mensagensAbertura: string[],
-  ai: AIProvider,
-): Promise<InsightsPainel> {
-  const prompt = montarPromptPainel(perfil, estudos, mensagensAbertura)
+  agora: number = Date.now(),
+): InsightsPainel {
+  const primeiroNome = perfil?.nome?.split(' ')[0]
+  const saud = saudacao(new Date(agora).getHours())
+  const ultimo = estudos[0] ?? null
 
-  let ultimoErro: unknown
-  for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
-    try {
-      const resposta = await ai.generate(prompt, { json: true })
-      const bruto = extrairJson(resposta)
-      return validarInsights(bruto)
-    } catch (e) {
-      ultimoErro = e
-      console.warn(`gerarInsightsPainel: tentativa ${tentativa}/${MAX_TENTATIVAS} falhou:`, e)
-      if (tentativa < MAX_TENTATIVAS) await dormir(PAUSA_ENTRE_TENTATIVAS_MS)
-    }
-  }
+  const titulos: string[] = [primeiroNome ? `${saud}, ${primeiroNome}!` : `${saud}!`]
+  if (ultimo) titulos.push(`Vamos continuar de onde parou em ${ultimo.estudo.nome}?`)
+  if (perfil?.materias?.length) titulos.push(`Pronto pra avançar em ${perfil.materias[0]}?`)
 
-  if (ehLimite(ultimoErro)) throw new IALimiteError()
-  throw new Error('Não consegui gerar as sugestões do Painel agora.', { cause: ultimoErro })
-}
+  const pior = piorDesempenhoRecente(estudos)
 
-function extrairJson(resposta: string): unknown {
-  const inicio = resposta.indexOf('{')
-  const fim = resposta.lastIndexOf('}')
-  if (inicio === -1 || fim === -1 || fim < inicio) {
-    throw new Error('a resposta não continha um JSON reconhecível')
-  }
-  return JSON.parse(resposta.slice(inicio, fim + 1))
-}
-
-function validarInsights(valor: unknown): InsightsPainel {
-  const o = comoObjeto(valor, 'insights')
-  const titulos = comoLista(o.titulos, 'titulos').map((t, i) => comoTexto(t, `titulos[${i}]`))
-  if (titulos.length === 0) throw new Error('insights sem nenhum título')
-
-  const s = comoObjeto(o.sugestoes, 'sugestoes')
   const sugestoes: SugestoesPainel = {
-    novoChat: comoTextoOuNull(s.novoChat),
-    estudar: comoTextoOuNull(s.estudar),
-    trabalhos: comoTextoOuNull(s.trabalhos),
-    provas: comoTextoOuNull(s.provas),
+    novoChat: null,
+    estudar: ultimo ? `Continue estudando ${ultimo.estudo.nome}` : null,
+    trabalhos: null,
+    provas: pior && taxaAcerto(pior) < 0.7 ? `Revise ${pior.estudo.nome}, onde você acertou menos` : null,
   }
 
   return { titulos, sugestoes }

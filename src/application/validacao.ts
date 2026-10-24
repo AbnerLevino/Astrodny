@@ -9,7 +9,7 @@
   Moram aqui (e não dentro do buildStudy) porque DOIS casos de uso precisam delas: o
   buildStudy (valida os blocos da aula) e o buildExam (valida as questões da prova).
 */
-import type { Question, ProvaQuestion, Formato, ExercicioCodigo } from '../domain/study'
+import type { Question, ProvaQuestion, Formato, ExercicioCodigo, ConteudoItem } from '../domain/study'
 
 // ----- primitivos: as peças que todos os validadores usam -----
 
@@ -105,6 +105,24 @@ export function validarExercicioCodigo(valor: unknown): ExercicioCodigo | undefi
     ? o.pontosChave.filter((p): p is string => typeof p === 'string')
     : []
   return { linguagem: o.linguagem, enunciado: o.enunciado, respostaEsperada, pontosChave }
+}
+
+// Valida UM item do array "conteudo" de um bloco: OU texto (parágrafo) OU uma tabela
+// estruturada ({ tipo: "tabela", cabecalho, linhas }). Lança se vier um objeto que não
+// é nem uma coisa nem outra — o buildStudy trata isso como falha de geração e TENTA DE
+// NOVO (mesma blindagem dos outros campos essenciais, não é auxiliar/opcional).
+export function validarConteudoItem(valor: unknown, onde: string): ConteudoItem {
+  if (typeof valor === 'string') return valor
+  const o = comoObjeto(valor, onde)
+  if (o.tipo !== 'tabela') throw new Error(`${onde}: esperava texto ou uma tabela ({ tipo: "tabela" })`)
+  const cabecalho = comoLista(o.cabecalho, `${onde}.cabecalho`).map((c, k) =>
+    comoTexto(c, `${onde}.cabecalho[${k}]`),
+  )
+  const linhas = comoLista(o.linhas, `${onde}.linhas`).map((linha, i) =>
+    comoLista(linha, `${onde}.linhas[${i}]`).map((c, k) => comoTexto(c, `${onde}.linhas[${i}][${k}]`)),
+  )
+  const legenda = typeof o.legenda === 'string' ? o.legenda : undefined
+  return { tipo: 'tabela', cabecalho, linhas, legenda }
 }
 
 // Igual ao comoTexto, mas NÃO lança: ausente/inválido vira null. Usado nas

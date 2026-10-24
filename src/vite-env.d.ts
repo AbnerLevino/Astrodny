@@ -4,8 +4,8 @@
 // disponíveis no navegador via import.meta.env). Todas opcionais: se não definir,
 // o código usa um padrão. Definir em `.env.local` (não versionado).
 interface ImportMetaEnv {
-  readonly VITE_OLLAMA_URL?: string // onde o Ollama/proxy responde
-  readonly VITE_OLLAMA_MODEL?: string // qual modelo usar (ex.: llama3.1:8b)
+  readonly VITE_GROQ_API_KEY?: string
+  readonly VITE_GROQ_MODEL?: string
 }
 
 interface ImportMeta {

@@ -14,37 +14,16 @@
 */
 import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import Sidebar, { ModalPerfil, ModalDescubraAstro } from './Sidebar'
+import Sidebar, { ModalPerfil } from './Sidebar'
 import PerfilModal from './PerfilModal'
+import FotoPerfil from '../components/FotoPerfil'
 import { useChats } from '../chats'
 import { useAuth } from '../auth'
 import { useStudies } from '../studies'
 import { gerarInsightsPainel } from '../../application/homeInsights'
 import { precisaAtualizar } from '../../application/homeInsightsCache'
-import { amostrarMensagensDeAbertura } from '../../application/amostraChats'
 import { localStorageHomeInsightsRepository } from '../../infrastructure/storage/localStorageHomeInsightsRepository'
 import type { InsightsPainel } from '../../domain/painel'
-import { retryProvider } from '../../infrastructure/ai/retryProvider'
-import { proxyProvider } from '../../infrastructure/ai/proxyProvider'
-import { fallbackProvider } from '../../infrastructure/ai/fallbackProvider'
-import { ollamaProvider } from '../../infrastructure/ai/ollamaProvider'
-import { groqProvider, groqConfigurado } from '../../infrastructure/ai/groqProvider'
-import { geminiProvider, geminiConfigurado } from '../../infrastructure/ai/geminiProvider'
-import { cloudflareProvider, cloudflareConfigurado } from '../../infrastructure/ai/cloudflareProvider'
-
-// Mesma cadeia do chat (ver ui/chats.tsx): em PROD tudo pelo proxy (chaves
-// escondidas no servidor); em DEV, Cloudflare/Gemini/Groq de reserva, Ollama
-// local por último. retryProvider dá 1 retentativa silenciosa num 429.
-const ia = retryProvider(
-  import.meta.env.PROD
-    ? proxyProvider
-    : fallbackProvider([
-        ...(cloudflareConfigurado ? [cloudflareProvider] : []),
-        ...(geminiConfigurado ? [geminiProvider] : []),
-        ...(groqConfigurado ? [groqProvider] : []),
-        ollamaProvider,
-      ]),
-)
 
 type ChaveAtalho = 'estudar' | 'trabalhos' | 'provas'
 
@@ -99,23 +78,22 @@ function Painel() {
   const navigate = useNavigate()
   const { usuario, perfil, onboardingPendente, salvarPerfil, entrar, sair } = useAuth()
   const { estudos } = useStudies()
-  const { chats, criarChat } = useChats()
+  const { criarChat } = useChats()
   const [menuAberto, setMenuAberto] = useState(false)
   const [texto, setTexto] = useState('')
   const [focado, setFocado] = useState(false) // campo em foco? abre pra largura total
   const [emBreve, setEmBreve] = useState<'provas' | null>(null)
   const [insights, setInsights] = useState<InsightsPainel | null>(null)
-  const [carregandoInsights, setCarregandoInsights] = useState(false)
-  // cartão de perfil: foto (logado) abre o modal da conta; sem login, mostra
-  // o chamariz "Descubra o Astro!" — mesmos modais que a Sidebar usa.
+  // cartão de perfil: foto (logado) abre o modal da conta; sem login, abre o
+  // mesmo modal (com "Entrar com Google" no lugar das opções de conta).
   const [modalAberto, setModalAberto] = useState(false)
   const [perfilModalAberto, setPerfilModalAberto] = useState(false)
-  const [descubraAberto, setDescubraAberto] = useState(false)
   // AMOSTRA: mesmo hack da Sidebar, fixo em 'free' até existir plano de verdade.
   const plano: 'free' | 'pro' = 'free'
 
-  // Busca/gera os insights UMA VEZ por visita ao Painel (ao montar). Visitante
-  // (sem usuario) nunca chama a IA — fica sempre no texto genérico dos atalhos.
+  // Gera os insights UMA VEZ por visita ao Painel (ao montar) — heurística local
+  // (ver application/homeInsights), sem IA. Visitante (sem usuario) fica sempre
+  // no texto genérico dos atalhos.
   useEffect(() => {
     if (!usuario) return
 
@@ -125,28 +103,11 @@ function Painel() {
       return
     }
 
-    let cancelado = false
-    setCarregandoInsights(true)
-    const amostra = amostrarMensagensDeAbertura(chats, Date.now())
-    gerarInsightsPainel(perfil, estudos, amostra, ia)
-      .then((novosInsights) => {
-        if (cancelado) return
-        localStorageHomeInsightsRepository.salvar({ geradoEm: new Date().toISOString(), insights: novosInsights })
-        setInsights(novosInsights)
-      })
-      .catch((e) => {
-        // cai pro texto genérico (insights continua null) — nunca trava a tela
-        console.warn('Painel: não consegui gerar os insights agora, caindo pro texto genérico', e)
-      })
-      .finally(() => {
-        if (!cancelado) setCarregandoInsights(false)
-      })
-
-    return () => {
-      cancelado = true
-    }
-    // perfil/estudos/chats são lidos só na montagem, de propósito — não quero
-    // re-chamar a IA a cada mensagem nova enquanto a pessoa está no Painel.
+    const novosInsights = gerarInsightsPainel(perfil, estudos, Date.now())
+    localStorageHomeInsightsRepository.salvar({ geradoEm: new Date().toISOString(), insights: novosInsights })
+    setInsights(novosInsights)
+    // perfil/estudos são lidos só na montagem, de propósito — não quero
+    // recalcular a cada mensagem nova enquanto a pessoa está no Painel.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usuario?.id])
 
@@ -209,7 +170,7 @@ function Painel() {
             aria-label="Abrir conta"
             className="absolute right-5 top-[max(1rem,env(safe-area-inset-top))] z-20 shrink-0"
           >
-            <img src="/perfil.png" alt="" className="h-11 w-11 rounded-full object-cover border-2 border-white/80" />
+            <FotoPerfil foto={usuario.foto} className="h-11 w-11 rounded-full border-2 border-white/80" />
           </button>
         )}
 
@@ -231,12 +192,6 @@ function Painel() {
             >
               {titulo}
             </h1>
-            {carregandoInsights && (
-              <span className="mt-3 inline-flex items-center gap-2 text-sm text-white/50">
-                <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white/70" />
-                Personalizando sugestões…
-              </span>
-            )}
 
             <div
               className={`mt-6 flex items-center gap-2 self-center rounded-[26px] border border-white/50 bg-white/5 pl-4 pr-2 py-1.5 backdrop-blur-md transition-all duration-300 ease-out ${
@@ -255,7 +210,7 @@ function Painel() {
                   }
                 }}
                 placeholder="Não sabe por onde começar? Conte o que precisa estudar..."
-                className="flex-1 bg-transparent font-sans text-[16px] leading-6 text-white placeholder:text-white/40 outline-none py-1.5"
+                className="flex-1 bg-transparent font-sans text-[16px] leading-6 text-white placeholder:text-white/40 placeholder:text-[15px] outline-none py-1.5"
               />
               <button
                 type="button"
@@ -294,22 +249,6 @@ function Painel() {
                 )
               })}
             </div>
-
-            {/* visitante (sem login): chamariz pro login, logo depois do
-                atalho de Provas — como mais uma coisa a descobrir ali. */}
-            {!usuario && (
-              <button
-                type="button"
-                onClick={() => setDescubraAberto(true)}
-                className="aurora-btn mt-1 inline-flex w-fit items-center gap-1.5 self-center rounded-full bg-white/20 px-4 py-2 text-sm font-medium text-white/90 [&_svg]:h-4 [&_svg]:w-4"
-              >
-                <span className="aurora-brilho" aria-hidden="true" />
-                <span className="relative z-10 inline-flex items-center gap-1.5">
-                  <IconeEstrelasAtalho />
-                  Descubra o Astro!
-                </span>
-              </button>
-            )}
           </div>
         </main>
 
@@ -353,8 +292,6 @@ function Painel() {
         />
       )}
 
-      {/* modal cheio "Descubra o Astro!" — chamariz de login pra visitante */}
-      {descubraAberto && <ModalDescubraAstro aoEntrar={entrar} aoFechar={() => setDescubraAberto(false)} />}
     </div>
   )
 }
@@ -402,16 +339,6 @@ function IconeProvasAtalho() {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="13" r="8" />
       <path d="M12 9v4l2.5 2.5M9 2h6" />
-    </svg>
-  )
-}
-
-// Estrelinhas do CTA "Descubra o Astro!" (mesmo desenho do da Sidebar)
-function IconeEstrelasAtalho() {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" stroke="none">
-      <path d="M11 2.5l1.7 4 4 1.7-4 1.7L11 13.9l-1.7-4L5.3 8.2l4-1.7z" />
-      <path d="M18.5 13l.85 2 2 .85-2 .85-.85 2-.85-2-2-.85 2-.85z" />
     </svg>
   )
 }

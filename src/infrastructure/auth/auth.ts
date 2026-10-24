@@ -9,7 +9,16 @@ import { supabase } from './supabaseClient'
 
 export async function entrarComGoogle(): Promise<void> {
   if (!supabase) throw new Error('Supabase não configurado ainda (faltam as variáveis em .env.local)')
-  await supabase.auth.signInWithOAuth({ provider: 'google' })
+  // redirectTo explícito: sem isso, o Supabase usa a "Site URL" configurada no
+  // painel (Authentication → URL Configuration) — em preview/localhost isso
+  // manda de volta pro domínio de produção em vez da aba atual. Forçando a
+  // origem atual, funciona igual em qualquer ambiente (desde que a origem
+  // esteja na lista de Redirect URLs permitidas do projeto Supabase).
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.origin },
+  })
+  if (error) throw error
 }
 
 export async function sairDaConta(): Promise<void> {

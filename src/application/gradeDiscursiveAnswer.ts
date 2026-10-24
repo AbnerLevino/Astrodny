@@ -17,6 +17,7 @@ import type {
   ExercicioCodigo,
   CorrecaoDiscursiva,
   ResultadoProvaDiscursiva,
+  ConteudoItem,
 } from '../domain/study'
 import { montarPromptCorrecao, montarPromptCorrecaoCodigo } from './prompts'
 
@@ -26,7 +27,7 @@ const LIMIAR_APROVACAO = 60 // nota >= 60 => acertou
 // Corrige UMA resposta escrita. Devolve { nota, acertou, porque, melhoria }.
 export async function gradeDiscursiveAnswer(
   pergunta: QuestionDiscursiva,
-  conteudoBloco: string[],
+  conteudoBloco: ConteudoItem[],
   respostaAluno: string,
   ai: AIProvider,
 ): Promise<CorrecaoDiscursiva> {
@@ -51,7 +52,7 @@ export async function gradeDiscursiveAnswer(
 // mesma blindagem de JSON — só troca o prompt (avalia lógica, não redação).
 export async function gradeCodeAnswer(
   exercicio: ExercicioCodigo,
-  conteudoBloco: string[],
+  conteudoBloco: ConteudoItem[],
   codigoAluno: string,
   ai: AIProvider,
 ): Promise<CorrecaoDiscursiva> {

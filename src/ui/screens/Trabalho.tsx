@@ -13,8 +13,7 @@ import type { TipoTrabalho, Metadados, Trabalho as TrabalhoDomain } from '../../
 import { ESTRUTURA_POR_TIPO, numerarSecoes } from '../../domain/trabalho'
 import { buildTrabalho, type EstruturaTrabalho } from '../../application/buildTrabalho'
 import { exportarAbnt } from '../../application/exportarAbnt'
-import { ollamaProvider } from '../../infrastructure/ai/ollamaProvider'
-import { groqProvider, groqConfigurado } from '../../infrastructure/ai/groqProvider'
+import { groqProvider } from '../../infrastructure/ai/groqProvider'
 import { proxyProvider } from '../../infrastructure/ai/proxyProvider'
 import { retryProvider } from '../../infrastructure/ai/retryProvider'
 import Sidebar from './Sidebar'
@@ -22,9 +21,11 @@ import { AbasFluxo } from '../abas'
 import { useAuth } from '../auth'
 
 // mesma lógica de wiring do StudySession: em PROD passa pelo proxy (chaves seguras,
-// cadeia Gemini→Groq 120b); em DEV usa Groq direto (se tiver chave) ou Ollama local.
+// cadeia Gemini→Groq 120b); em DEV usa Groq direto (free tier). SEM retryProvider no
+// proxy (já é fallback por dentro — ver nota em StudySession.tsx); no Groq direto
+// (provedor ÚNICO em dev) o retry continua fazendo sentido.
 const PROD = import.meta.env.PROD
-const ia = retryProvider(PROD ? proxyProvider : groqConfigurado ? groqProvider : ollamaProvider)
+const ia = PROD ? proxyProvider : retryProvider(groqProvider)
 
 type Etapa = 'entrada' | 'processando' | 'visualizer' | 'metadados'
 

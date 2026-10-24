@@ -18,6 +18,7 @@ export type Usuario = {
   id: string
   nome: string
   email: string | null
+  foto: string | null
 }
 
 type AuthContexto = {
@@ -37,7 +38,8 @@ const Contexto = createContext<AuthContexto | null>(null)
 
 function paraUsuario(u: User): Usuario {
   const nome = (u.user_metadata?.full_name as string | undefined) ?? u.email ?? 'Aluno'
-  return { id: u.id, nome, email: u.email ?? null }
+  const foto = (u.user_metadata?.avatar_url as string | undefined) ?? (u.user_metadata?.picture as string | undefined) ?? null
+  return { id: u.id, nome, email: u.email ?? null, foto }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {

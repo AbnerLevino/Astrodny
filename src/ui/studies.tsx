@@ -4,28 +4,46 @@
   A StudySession ADICIONA um estudo ao terminar a prova; o Sidebar LÊ a lista pra
   mostrar o histórico. Como é um Context, terminar um estudo atualiza o menu na
   hora, sem recarregar a página.
-*/
-import { createContext, useContext, useState, type ReactNode } from 'react'
-import type { StudySalvo } from '../domain/study'
-import { localStorageStudyRepository } from '../infrastructure/storage/localStorageStudyRepository'
 
-// Onde os estudos são guardados. Trocar localStorage -> nuvem = mudar SÓ esta linha.
-const repo = localStorageStudyRepository
+  Repositório muda conforme o login (mesma ideia do perfil em ui/auth.tsx):
+  visitante guarda só no aparelho; logado guarda na nuvem (tabela `estudos`) —
+  ver infrastructure/storage/{localStorageStudyRepository,supabaseStudyRepository}.
+*/
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import type { StudySalvo } from '../domain/study'
+import type { StudyRepository } from '../application/ports/StudyRepository'
+import { localStorageStudyRepository } from '../infrastructure/storage/localStorageStudyRepository'
+import { supabaseStudyRepository } from '../infrastructure/storage/supabaseStudyRepository'
+import { useAuth } from './auth'
 
 type EstudosContexto = {
   estudos: StudySalvo[]
-  salvarEstudo: (estudo: StudySalvo) => void
+  salvarEstudo: (estudo: StudySalvo) => Promise<void>
 }
 
 const Contexto = createContext<EstudosContexto | null>(null)
 
 export function StudiesProvider({ children }: { children: ReactNode }) {
-  // carrega o histórico salvo uma vez, na montagem
-  const [estudos, setEstudos] = useState<StudySalvo[]>(() => repo.listar())
+  const { usuario } = useAuth()
+  const [estudos, setEstudos] = useState<StudySalvo[]>([])
+  const repo: StudyRepository = usuario ? supabaseStudyRepository(usuario.id) : localStorageStudyRepository
 
-  function salvarEstudo(estudo: StudySalvo) {
-    repo.salvar(estudo) // persiste no disco
-    setEstudos((prev) => [estudo, ...prev]) // atualiza a tela na hora (mais novo no topo)
+  // recarrega a lista sempre que o login muda (visitante -> logado troca de
+  // gaveta inteira: do localStorage pra nuvem)
+  useEffect(() => {
+    let cancelado = false
+    repo.listar().then((lista) => {
+      if (!cancelado) setEstudos(lista)
+    })
+    return () => {
+      cancelado = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usuario?.id])
+
+  async function salvarEstudo(estudo: StudySalvo) {
+    setEstudos((prev) => [estudo, ...prev.filter((e) => e.id !== estudo.id)]) // otimista, upsert
+    await repo.salvar(estudo)
   }
 
   return <Contexto.Provider value={{ estudos, salvarEstudo }}>{children}</Contexto.Provider>

@@ -11,7 +11,8 @@
   A PROVA é montada à parte, pelo `buildExam` (estágio 2), por um modelo FORTE (ex.: Groq).
   Motivo: um modelo pequeno local, num schema grande, "dava o estudo por encerrado"
   depois dos blocos e OMITIA a prova — derrubando o estudo inteiro. Separando, o local
-  faz bem o que sabe (ler o material e ensinar) e a prova vira responsabilidade de quem
+  faz bem o que sabe (ler o 
+  aterial e ensinar) e a prova vira responsabilidade de quem
   a monta bem. Por isso o `Study` sai daqui com `prova: []` — o estágio 2 a preenche.
 
   BLINDAGEM: a resposta de um modelo pequeno não é confiável. Pode vir JSON torto
@@ -22,7 +23,7 @@
 import type { AIProvider } from './ports/AIProvider'
 import type { Mode, Formato, Study, Block, EstudoConfig } from '../domain/study'
 import { buildStudyPrompt } from './prompts'
-import { comoObjeto, comoLista, comoTexto, validarPergunta, validarExercicioCodigo } from './validacao'
+import { comoObjeto, comoLista, comoTexto, validarPergunta, validarExercicioCodigo, validarConteudoItem } from './validacao'
 import { IALimiteError, ehLimite } from './ports/aiErrors'
 
 // Quantas vezes pedir à IA antes de desistir (a 1ª + 1 retry).
@@ -46,7 +47,7 @@ export async function buildStudy(
   let ultimoErro: unknown
   for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
     try {
-      // json:true => pedimos JSON válido ao modelo (no Ollama, ativa format:"json").
+      // json:true => pedimos JSON válido ao modelo (no Groq, ativa response_format json_object).
       const resposta = await ai.generate(prompt, { json: true })
       const bruto = extrairJson(resposta) // texto -> objeto (lança se malformado)
       return validarStudy(bruto, formato) // objeto -> Study (só a aula; prova vem no estágio 2)
@@ -95,7 +96,7 @@ function validarBloco(valor: unknown, i: number, formato: Formato): Block {
   return {
     titulo: comoTexto(o.titulo, `bloco ${i}.titulo`),
     conteudo: comoLista(o.conteudo, `bloco ${i}.conteudo`).map((p, k) =>
-      comoTexto(p, `bloco ${i}.conteudo[${k}]`),
+      validarConteudoItem(p, `bloco ${i}.conteudo[${k}]`),
     ),
     pergunta: validarPergunta(o.pergunta, `bloco ${i}.pergunta`, formato),
     exercicioCodigo: validarExercicioCodigo(o.exercicioCodigo),

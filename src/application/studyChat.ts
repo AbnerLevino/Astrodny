@@ -6,7 +6,7 @@
   e o injeta no prompt. Devolve a resposta em stream — a MESMA forma que o chat já usa
   (`AsyncIterable<string>`), então o frontend existente pluga com o mesmo `for await`.
 
-  Não sabe o que é uma <div>, nem se a IA é mock ou Ollama (fala só pela porta). E,
+  Não sabe o que é uma <div>, nem se a IA é mock ou Groq (fala só pela porta). E,
   importante: NÃO mexe no progresso do estudo — só responde. Avançar bloco, responder
   questão etc. continua sendo responsabilidade do fluxo de estudo atual (intacto).
 */
@@ -55,6 +55,8 @@ export function montarContextoEstudo(
     blocoIndex,
     blocoTitulo: bloco?.titulo ?? '',
     blocoConteudo: bloco?.conteudo ?? [],
+    // só os TÍTULOS dos outros blocos (não o conteúdo) — ver comentário no tipo.
+    outrosBlocosTitulos: estudo.blocos.filter((_, idx) => idx !== blocoIndex).map((b) => b.titulo),
     perguntaDoBloco: bloco?.pergunta?.enunciado,
     conceitosRelacionados: extras?.conceitosRelacionados,
     progresso:

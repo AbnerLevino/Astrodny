@@ -2,7 +2,7 @@
   CASO DE USO (application) — a regra do chat, SEM React e SEM tela.
 
   Recebe o histórico da conversa, monta o prompt e pede a resposta em stream à IA.
-  Não sabe se a IA é mock ou Ollama (fala só pela porta AIProvider), e não sabe o
+  Não sabe se a IA é mock ou Groq (fala só pela porta AIProvider), e não sabe o
   que é uma <div> (só devolve os pedaços de texto). É a "tradução" entre o mundo da
   tela e o mundo da IA — e por isso dá pra testar sozinho.
 

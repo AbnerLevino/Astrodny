@@ -6,8 +6,8 @@
   "tenta a nuvem na ordem, cai pro próximo se falhar" serve aos dois lados.
 
   DUAS cadeias, propósitos diferentes:
-  - cadeiaServidor(): usada por /api/generate (Estudar — aula/prova/correção). Gemini → Groq
-    (gpt-oss-120b — modelo forte, cota própria, nunca compartilhada com o chat).
+  - cadeiaServidor(): usada por /api/generate (Estudar — aula/prova/correção). Groq
+    (gpt-oss-120b — modelo forte, cota própria, nunca compartilhada com o chat) → Gemini.
   - cadeiaChat(): usada por /api/stream (o CHAT). Gemini → Groq (llama-3.1-8b-instant,
     PROVIDER DIFERENTE do usado no Estudar — cota própria) → OpenRouter → Cloudflare.
 
@@ -38,8 +38,8 @@ import {
 
 export function cadeiaServidor(): AIProvider {
   const provedores: AIProvider[] = []
-  if (geminiConfigurado) provedores.push(geminiProvider)
   if (groqConfigurado) provedores.push(groqProvider)
+  if (geminiConfigurado) provedores.push(geminiProvider)
 
   // ===== TERCEIRO ELO (rede de segurança) =====
   // Se Gemini e Groq estourarem o limite ao mesmo tempo, não há pra onde cair. Um 3º

@@ -13,8 +13,10 @@ function estudoEm(dataISO: string): StudySalvo {
     id: '1',
     data: dataISO,
     origem: 'teste.pdf',
+    materia: 'Geral',
     estudo: { nome: 'teste', formato: 'multipla_escolha', blocos: [], prova: [] },
     resultado: { acertos: 0, total: 0, porBloco: [], erros: [] },
+    progresso: null,
   }
 }
 

@@ -12,7 +12,6 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Mensagem, Chat, Anexo } from '../domain/chat'
 import { chat } from '../application/chat'
-import { ollamaProvider } from '../infrastructure/ai/ollamaProvider'
 import { groqProvider, groqConfigurado } from '../infrastructure/ai/groqProvider'
 import { geminiProvider, geminiConfigurado } from '../infrastructure/ai/geminiProvider'
 import { cloudflareProvider, cloudflareConfigurado } from '../infrastructure/ai/cloudflareProvider'
@@ -29,24 +28,22 @@ export type { Mensagem, Chat, Anexo } // reexporta pra quem já importava daqui 
 
 // CADEIA DE IA DO CHAT.
 // EM PRODUÇÃO: tudo pelo proxy (/api/*) — as chaves ficam no servidor, a cadeia roteia lá
-// (ver api/_lib/chain.ts: cadeiaChat() — Cloudflare primeiro, igual aqui).
-// EM DEV: Cloudflare primeiro (bom em texto puro, mais rápido), Gemini em seguida
-// (contexto grande, bom pra quando o Cloudflare falha ou o assunto é mais complexo),
-// OpenRouter (modelo ":free", sem disputar cota com o Groq), Groq por último
-// (reservado pro Estudar), Ollama local como rede de segurança.
-// retryProvider por fora: num pico de 429, espera (backoff) e tenta de novo UMA vez,
-// em silêncio — o aluno nem percebe. Vale tanto pro proxy (prod) quanto pra cadeia (dev).
-const ia = retryProvider(
-  import.meta.env.PROD
-    ? proxyProvider
-    : fallbackProvider([
-        ...(cloudflareConfigurado ? [cloudflareProvider] : []),
-        ...(geminiConfigurado ? [geminiProvider] : []),
-        ...(openrouterConfigurado ? [openrouterProvider] : []),
-        ...(groqConfigurado ? [groqProvider] : []),
-        ollamaProvider,
-      ]),
-)
+// (ver api/_lib/chain.ts: cadeiaChat() — hoje Gemini primeiro, por qualidade).
+// EM DEV: Gemini primeiro (contexto grande, boa qualidade), Groq em seguida (rápido,
+// free tier), OpenRouter como rede de segurança (modelo ":free", sem disputar cota com
+// o Groq), Cloudflare por último (só emergência — pior qualidade, modelo quantizado).
+// SEM retryProvider por fora aqui: tanto o proxy (prod) quanto a cadeia (dev) JÁ SÃO
+// fallbackProvider por dentro (vários provedores em sequência) — envolver com retry
+// faz a cadeia INTEIRA rodar de novo quando TODOS já falharam, martelando de novo os
+// mesmos provedores exauridos (foi a causa da enxurrada de 429/503 vista no Network).
+const ia = import.meta.env.PROD
+  ? proxyProvider
+  : fallbackProvider([
+      ...(geminiConfigurado ? [geminiProvider] : []),
+      ...(groqConfigurado ? [groqProvider] : []),
+      ...(openrouterConfigurado ? [openrouterProvider] : []),
+      ...(cloudflareConfigurado ? [cloudflareProvider] : []),
+    ])
 // Onde os chats são guardados. Trocar localStorage -> nuvem é mudar SÓ esta linha.
 const repo = localStorageChatRepository
 

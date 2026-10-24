@@ -1,9 +1,11 @@
 /*
   INFRAESTRUTURA (infrastructure/storage) — adaptador da porta StudyRepository
-  que guarda os estudos feitos no localStorage.
+  que guarda os estudos feitos no localStorage (visitante, sem login).
 
-  Mesma ideia do repositório de chats (JSON + try/catch). A diferença: salvar
-  ACRESCENTA o novo estudo no topo da lista existente.
+  Mesma ideia do repositório de chats (JSON + try/catch). `salvar` faz UPSERT
+  por `id`: mesma sessão que ganha progresso ou conclui a prova atualiza o
+  registro existente em vez de duplicar — ver supabaseStudyRepository (mesma
+  regra lá, mas em SQL).
 */
 import type { StudyRepository } from '../../application/ports/StudyRepository'
 import type { StudySalvo } from '../../domain/study'
@@ -21,13 +23,14 @@ function ler(): StudySalvo[] {
 }
 
 export const localStorageStudyRepository: StudyRepository = {
-  listar(): StudySalvo[] {
+  async listar(): Promise<StudySalvo[]> {
     return ler()
   },
 
-  salvar(estudo: StudySalvo): void {
+  async salvar(estudo: StudySalvo): Promise<void> {
     try {
-      const lista = [estudo, ...ler()] // mais novo no topo
+      const resto = ler().filter((e) => e.id !== estudo.id)
+      const lista = [estudo, ...resto] // mais novo (ou recém-tocado) no topo
       localStorage.setItem(CHAVE, JSON.stringify(lista))
     } catch {
       // sem espaço ou indisponível: ignora

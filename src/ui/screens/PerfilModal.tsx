@@ -83,7 +83,7 @@ function PerfilModal({
       {/* fundo: só existe (clicável p/ fechar) no desktop — no mobile é tela cheia, sem o que fechar atrás */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm lg:block hidden" onClick={aoFechar} />
 
-      <div className="animar-subida relative z-10 flex h-dvh w-full flex-col bg-[#141416] text-white lg:h-auto lg:max-h-[85vh] lg:w-[34rem] lg:rounded-3xl lg:border lg:border-white/10">
+      <div className="animar-subida relative z-10 flex h-dvh w-full flex-col bg-[#141416] text-white lg:h-auto lg:max-h-[85vh] lg:w-[23rem] lg:rounded-3xl lg:border lg:border-white/10">
         {/* cabeçalho */}
         <div className="flex items-center justify-between px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-4 lg:pt-6">
           <div>

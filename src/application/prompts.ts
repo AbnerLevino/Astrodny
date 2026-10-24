@@ -5,7 +5,7 @@
   Pedimos a resposta SEMPRE em JSON, num formato fixo, pra conseguir interpretar
   de volta pra um `Study` — seja o mock ou um modelo real.
 */
-import type { Mode, Formato, QuestionDiscursiva, ExercicioCodigo, Study, EstudoConfig, StudySalvo } from '../domain/study'
+import type { Mode, Formato, QuestionDiscursiva, ExercicioCodigo, Study, EstudoConfig, ConteudoItem } from '../domain/study'
 import type { Personalidade } from '../domain/settings'
 import type { Mensagem } from '../domain/chat'
 import type { ContextoEstudo } from '../domain/studyChat'
@@ -178,10 +178,15 @@ export function buildStudyPrompt(
 ): string {
   // PROFUNDIDADE do ensino — ramifica de verdade pelo modo, com exigência CONCRETA
   // (um modelo pequeno obedece o concreto e ignora pedidos vagos tipo "mais detalhes").
+  // A regra anti-nominalização ("cera" de dissertação) vale nos DOIS modos agora —
+  // antes só valia na completa, mas o problema (texto academico/vago) aparece igual
+  // na objetiva, só que com menos parágrafos pra disfarçar.
+  const antiNominalizacao =
+    'Escreva como um professor bom explicando pra um aluno, com frases DIRETAS (sujeito + verbo + complemento). EVITE nominalização acadêmica — troque "a normalização consiste em um conjunto de técnicas cujo objetivo primordial é..." por algo como "a normalização organiza os dados pra evitar repetição". Mesma informação, sem "cera" de dissertação.'
   const depth =
     mode === 'objetiva'
-      ? 'PROFUNDIDADE: cada bloco deve ter de 2 a 5 parágrafos — direto ao ponto, o essencial do tópico.'
-      : 'PROFUNDIDADE: cada bloco deve ter de 4 a 7 parágrafos — comece pela definição, explique o PORQUÊ, traga um exemplo concreto e cubra as nuances importantes do tópico. NÃO resuma: este é o modo aprofundado. MAS profundidade NÃO é vocabulário difícil: escreva como um professor bom explicando pra um aluno, com frases DIRETAS (sujeito + verbo + complemento). EVITE nominalização acadêmica — troque "a normalização consiste em um conjunto de técnicas cujo objetivo primordial é..." por algo como "a normalização organiza os dados pra evitar repetição". Mesma informação, mesma extensão, sem "cera" de dissertação.'
+      ? `PROFUNDIDADE: cada bloco deve ter de 2 a 5 parágrafos — direto ao ponto, o essencial do tópico. ${antiNominalizacao}`
+      : `PROFUNDIDADE: cada bloco deve ter de 4 a 7 parágrafos — comece pela definição, explique o PORQUÊ, traga um exemplo concreto e cubra as nuances importantes do tópico. NÃO resuma: este é o modo aprofundado. ${antiNominalizacao}`
 
   // Nº de tópicos: explícito (o aluno escolheu no "Ajustes") ou AUTOMÁTICO (a IA decide).
   const nTop = config?.numTopicos
@@ -190,9 +195,39 @@ export function buildStudyPrompt(
       ? `Monte EXATAMENTE ${nTop} tópicos (um bloco por tópico).`
       : 'Monte de 3 a 6 tópicos, conforme o que o material comporta — nem mais, nem menos.'
 
-  // EXEMPLOS são PADRÃO: todo tópico ganha ao menos um exemplo concreto (pega-se a ideia).
-  const exemplos =
-    'Em CADA tópico, inclua pelo menos UM exemplo concreto (um caso, número ou situação real) que ajude o aluno a entender a ideia. Esse exemplo deve ser um ITEM SEPARADO do array "conteudo" (não embutido no meio de um parágrafo), começando com "Exemplo:" — assim ele pode ser destacado visualmente na tela, igual já se faz com código.'
+  // TÍTULO do bloco: pergunta direta ("Por que...", "Como...", "O que é...") ligada
+  // ao porquê do conceito, em vez de rótulo genérico ("Introdução a X") — só quando
+  // o tópico permitir essa forma naturalmente.
+  const tituloInstrucao =
+    'TÍTULO de cada bloco: quando o tópico permitir, formule como uma PERGUNTA direta ligada ao porquê/como do conceito (ex.: "Por que normalizar um banco de dados?", "Como funciona a recursão?") — NUNCA um rótulo frio tipo "Introdução a X" ou "Conceitos de X". Use uma frase afirmativa curta só quando a pergunta não couber bem no tópico.'
+
+  // FORMATAÇÃO RICA dentro de cada item de "conteudo": sem isso, o modelo cai no
+  // parágrafo corrido genérico (o renderer já suporta negrito/listas/tabela — ver
+  // ItemConteudo em StudySession.tsx — mas só usa o que o prompt pedir).
+  const formatacao =
+    'FORMATAÇÃO dentro de cada item de "conteudo" que for TEXTO: destaque em **negrito** os 2-3 termos técnicos centrais do parágrafo (os que o aluno precisa gravar), direto no meio da frase. Quando o conteúdo for naturalmente uma ENUMERAÇÃO (motivos, passos, características, vantagens), use uma LISTA markdown ("- item") em vez de espremer tudo num parágrafo só. NUNCA escreva uma tabela como texto markdown dentro de uma string (ex.: "| col1 | col2 |") — toda tabela é um ITEM ESTRUTURADO À PARTE, ver TABELA abaixo.'
+
+  // ESTRUTURA do array "conteudo": define os PAPÉIS dos itens (não só "parágrafos
+  // soltos") — definição primeiro, exemplo(s) com o raciocínio da transformação
+  // quando houver, e um fechamento OBRIGATÓRIO que reforça a ideia central.
+  //
+  // TABELA é um ITEM ESTRUTURADO (objeto), não markdown dentro de uma string: pedir pro
+  // modelo escrever "\n" corretamente dentro de uma string JSON é frágil — na prática ele
+  // tende a achatar tudo numa linha só, e a tabela vira texto cru na tela (bug real que já
+  // vimos). Como array de strings, um objeto { cabecalho, linhas } nunca precisa de
+  // newline escapado, então não tem como quebrar.
+  const estrutura = `ESTRUTURA do array "conteudo" de cada bloco — cada PASSO abaixo é um ITEM SEPARADO
+do array (NUNCA junte dois passos na mesma string; é a separação em itens que gera a
+separação visual na tela):
+1. PRIMEIRO item: a DEFINIÇÃO direta do conceito — o que é e pra que serve, sem rodeio histórico/motivacional antes.
+2. Item começando com "Problema:" — 1 frase curta com o problema concreto que motiva o exemplo.
+3. Quando o exemplo envolver uma TRANSFORMAÇÃO/COMPARAÇÃO concreta (estado antes/depois de uma normalização, valores mudando, cálculo corrigido): UM ÚNICO item do TIPO TABELA (objeto, não string):
+   { "tipo": "tabela", "cabecalho": ["coluna1", "coluna2", "..."], "linhas": [["valor", "valor"], ["valor", "valor"]], "legenda": "Exemplo" }
+   Quando houver um ANTES e um DEPOIS, NÃO crie duas tabelas — é UMA tabela só, comparável num lugar só (ex.: uma coluna "Momento" com "Antes"/"Depois", ou duas tabelas condensadas na mesma legenda só se for IMPOSSÍVEL comparar numa linha). O aluno não deve pular entre tabelas pra entender a mudança.
+   - CASO CLÁSSICO (sempre tabela, nunca prosa, quando ocorrer): uma célula guarda MAIS DE UM valor junto (ex.: "(11) 9999-9999, (11) 8888-8888" numa célula de telefone) — vira uma tabela com uma linha por valor. NUNCA gere tabela com "linhas" vazio ou "cabecalho" vazio.
+4. Item de fechamento do exemplo (string, sem prefixo fixo) — 1 frase curta dizendo por que a solução resolve o problema do passo 2. OMITA se a tabela já for autoexplicativa.
+5. Quando o exemplo for um CENÁRIO narrativo SEM dado tabular (nada de números/valores pra comparar), pule a tabela — só o "Problema:" (passo 2) seguido de um item "Exemplo:" (string) com o caso.
+6. ÚLTIMO item do bloco, começando com "Conclusão:" — SÓ inclua se houver uma ideia NOVA pra fechar (uma implicação, um "por isso..." que ainda não foi dito). NUNCA repita a definição do passo 1 com sinônimos só pra preencher o campo — isso vira frase-muleta genérica tipo "X é essencial para garantir a consistência, a precisão e a eficiência operacional" (proibido: encadear 3 substantivos abstratos no final só pra soar conclusivo). Se o bloco não tem uma conclusão nova de verdade, OMITA este item — não force.`
 
   // CÓDIGO + prática: só quando o aluno liga o controle (matérias técnicas/programação).
   const codigo = config?.incluirCodigo
@@ -251,19 +286,27 @@ ignore o resto do material por causa desse pedido.\n`
 
   const material = temMaterial ? `CONTEÚDO:\n${content}` : `TEMA / PEDIDO DO ALUNO:\n${pedido}`
 
+  // Exemplo CONCRETO do array "conteudo" (worked example) — mostrar o JSON exato
+  // (incluindo o item de tabela) funciona muito melhor do que só descrever a regra em
+  // prosa: o modelo copia o PADRÃO, não precisa inferir a forma certa sozinho.
+  const exemploConteudo =
+    '["A **normalização** organiza os dados pra evitar repetição.", "Problema: uma célula de telefone guarda dois números juntos.", { "tipo": "tabela", "cabecalho": ["id", "telefone"], "linhas": [["1", "3333-1111"], ["1", "3333-2222"]], "legenda": "Exemplo" }, "Separar os telefones numa linha por valor resolve a atomicidade."]'
+
   // ANCORAGEM ao material (Opção B — comportamento fixo): o material é a fonte PRINCIPAL;
   // a IA pode enriquecer com conhecimento próprio, mas SINALIZANDO o que é complementar.
   // Só se aplica quando HÁ material (sem PDF, o estudo já vem do conhecimento do modelo).
   const ancoragem = !temMaterial
     ? ''
-    : '\nANCORAGEM: baseie o ensino e as PERGUNTAS no material fornecido — ele é a fonte PRINCIPAL. Você PODE enriquecer com conhecimento próprio quando ajudar o aluno a entender melhor, mas SINALIZE claramente o que não está no material (ex.: inicie a frase com "Complemento:" ou "Além do material:"). Nas perguntas, cobre PRIORITARIAMENTE o que está no material; não exija o que foi apenas complemento.'
+    : '\nANCORAGEM: baseie o ensino e as PERGUNTAS no material fornecido — ele é a fonte PRINCIPAL. Você PODE enriquecer com conhecimento próprio quando ajudar o aluno a entender melhor, mas SINALIZE claramente o que não está no material (ex.: inicie a frase com "Complemento:" ou "Além do material:"). Nas perguntas, cobre PRIORITARIAMENTE o que está no material; não exija o que foi apenas complemento.\nSe o material já trouxer a informação como lista/bullets ou tabela, PRESERVE essa estrutura no item correspondente de "conteudo" (vire lista/tabela markdown) em vez de achatar tudo em prosa corrida.'
 
   // DISCURSIVO: perguntas abertas + gabarito-modelo (respostaEsperada) + pontos-chave.
   // O `tipo` de cada pergunta NÃO é pedido ao modelo — o validador o carimba a partir
   // do formato. Aqui só pedimos os campos de conteúdo.
   if (formato === 'discursivo') {
     return `Você é um professor particular de ensino superior. ${fonte} ${depth}
-${topicos} ${exemplos}${codigo}${regraCodigo}${ancoragem}${exercicioCodigo}
+${topicos} ${tituloInstrucao}
+${estrutura}
+${formatacao}${codigo}${regraCodigo}${ancoragem}${exercicioCodigo}
 Para cada bloco, escreva o ensino RESPEITANDO A PROFUNDIDADE acima e crie
 1 PERGUNTA ABERTA (dissertativa, que exija o aluno EXPLICAR com as próprias palavras — NADA de
 alternativas). Para cada pergunta, gere a RESPOSTA ESPERADA (concisa: 2 a 4 frases) e de 3 a 5
@@ -279,7 +322,7 @@ Responda SOMENTE com um JSON neste formato exato (sem texto fora do JSON):
   "blocos": [
     {
       "titulo": "título do bloco",
-      "conteudo": ["parágrafo 1", "parágrafo 2", "..."],
+      "conteudo": ${exemploConteudo},
       "pergunta": {
         "enunciado": "...",
         "respostaEsperada": "...",
@@ -294,7 +337,9 @@ ${material}`
 
   // MÚLTIPLA ESCOLHA: comportamento original (alternativas + índice da correta).
   return `Você é um professor particular. ${fonte} ${depth}
-${topicos} ${exemplos}${codigo}${regraCodigo}${ancoragem}${exercicioCodigo}
+${topicos} ${tituloInstrucao}
+${estrutura}
+${formatacao}${codigo}${regraCodigo}${ancoragem}${exercicioCodigo}
 Para cada bloco, escreva o ensino RESPEITANDO A PROFUNDIDADE acima e faça 1 pergunta de
 alternativas pra fixar. (A prova final é montada à parte.)
 
@@ -304,7 +349,7 @@ Responda SOMENTE com um JSON neste formato exato (sem texto fora do JSON):
   "blocos": [
     {
       "titulo": "título do bloco",
-      "conteudo": ["parágrafo 1", "parágrafo 2", "..."],
+      "conteudo": ${exemploConteudo},
       "pergunta": { "enunciado": "...", "alternativas": ["a", "b", "c", "d"], "correta": 0 }
     }
   ]
@@ -321,6 +366,19 @@ const QTD_PROVA: Record<Formato, number> = {
   multipla_escolha: 6, // alternativas são baratas de corrigir (puro) — dá pra cobrir mais
 }
 
+// Serializa um item de "conteudo" (string OU tabela estruturada) pra TEXTO LEGÍVEL —
+// usado só pra ALIMENTAR outros prompts (prova, correção, tira-dúvidas), nunca pra tela
+// (a tela desenha a tabela de verdade — ver ItemConteudo em StudySession.tsx).
+function itemConteudoParaTexto(item: ConteudoItem): string {
+  if (typeof item === 'string') return item
+  const linhas = [item.cabecalho.join(' | '), ...item.linhas.map((l) => l.join(' | '))]
+  return (item.legenda ? `${item.legenda}:\n` : '') + linhas.join('\n')
+}
+
+function conteudoParaTexto(conteudo: ConteudoItem[]): string {
+  return conteudo.map(itemConteudoParaTexto).join('\n')
+}
+
 // Descreve a AULA pronta pro modelo da prova: título + conteúdo de cada bloco + a
 // pergunta de fixação já usada nele (pra prova NÃO repeti-la e cobrir o resto).
 function descreverAula(estudo: Study): string {
@@ -329,7 +387,7 @@ function descreverAula(estudo: Study): string {
       const jaUsada = b.pergunta?.enunciado
         ? `\n(pergunta de fixação já usada neste bloco — NÃO repita: "${b.pergunta.enunciado}")`
         : ''
-      return `BLOCO ${i} — ${b.titulo}\n${b.conteudo.join('\n')}${jaUsada}`
+      return `BLOCO ${i} — ${b.titulo}\n${conteudoParaTexto(b.conteudo)}${jaUsada}`
     })
     .join('\n\n')
 }
@@ -426,7 +484,7 @@ Escreva UMA frase curta (no máximo ~22 palavras), em 1ª pessoa do plural ("Lev
 // gabarito-modelo + os pontos-chave + o conteúdo do bloco. Pede JSON pra parsear.
 export function montarPromptCorrecao(
   pergunta: QuestionDiscursiva,
-  conteudoBloco: string[],
+  conteudoBloco: ConteudoItem[],
   respostaAluno: string,
 ): string {
   const n = pergunta.pontosChave.length
@@ -453,7 +511,7 @@ PERGUNTA: ${pergunta.enunciado}
 RESPOSTA ESPERADA: ${pergunta.respostaEsperada}
 PONTOS-CHAVE:
 ${pontos}
-CONTEÚDO ENSINADO: ${conteudoBloco.join('\n')}
+CONTEÚDO ENSINADO: ${conteudoParaTexto(conteudoBloco)}
 RESPOSTA DO ALUNO: ${respostaAluno}`
 }
 
@@ -464,7 +522,7 @@ RESPOSTA DO ALUNO: ${respostaAluno}`
 // importam — só importa se o código, ao rodar, produz o comportamento esperado.
 export function montarPromptCorrecaoCodigo(
   exercicio: ExercicioCodigo,
-  conteudoBloco: string[],
+  conteudoBloco: ConteudoItem[],
   codigoAluno: string,
 ): string {
   const n = exercicio.pontosChave.length
@@ -487,7 +545,7 @@ EXERCÍCIO: ${exercicio.enunciado}
 LÓGICA ESPERADA: ${exercicio.respostaEsperada}
 COMPORTAMENTOS QUE O CÓDIGO PRECISA TER:
 ${pontos}
-CONTEÚDO ENSINADO NO BLOCO: ${conteudoBloco.join('\n')}
+CONTEÚDO ENSINADO NO BLOCO: ${conteudoParaTexto(conteudoBloco)}
 CÓDIGO DO ALUNO:
 \`\`\`${exercicio.linguagem}
 ${codigoAluno}
@@ -504,7 +562,12 @@ function descreverContexto(ctx: ContextoEstudo): string {
   if (ctx.material) linhas.push(`- Material: ${ctx.material}`)
   linhas.push(`- Bloco atual (${ctx.blocoIndex + 1}): ${ctx.blocoTitulo}`)
   if (ctx.blocoConteudo.length) {
-    linhas.push(`- Conteúdo do bloco atual:\n${ctx.blocoConteudo.join('\n')}`)
+    linhas.push(`- Conteúdo do bloco atual:\n${conteudoParaTexto(ctx.blocoConteudo)}`)
+  }
+  // Só os TÍTULOS dos outros blocos — contexto quase de graça (nenhum conteúdo extra
+  // sendo mandado), mas já deixa a IA saber que esses tópicos existem no mesmo estudo.
+  if (ctx.outrosBlocosTitulos?.length) {
+    linhas.push(`- Outros tópicos deste estudo (só os títulos, sem o conteúdo deles): ${ctx.outrosBlocosTitulos.join('; ')}`)
   }
   if (ctx.perguntaDoBloco) linhas.push(`- Pergunta de fixação do bloco: ${ctx.perguntaDoBloco}`)
   if (ctx.conceitosRelacionados?.length) {
@@ -548,7 +611,13 @@ ${descreverContexto(contexto)}
   NÃO significa que ele terminou o bloco — significa só que precisa de ajuda agora.
 - Seja focado e direto na dúvida; não repita o bloco inteiro, esclareça o ponto.
 - Se a dúvida fugir do estudo atual, ajude mesmo assim, mas tente conectar de volta ao
-  que ele está estudando.`
+  que ele está estudando.
+- Se a dúvida for sobre um assunto de OUTRO bloco (veja "Outros tópicos deste estudo"
+  acima — você só tem os TÍTULOS, não o conteúdo deles): responda mesmo assim, com seu
+  próprio conhecimento, e avise em uma linha que aquele bloco específico cobre o assunto
+  (ex.: "isso é o foco do bloco 'X', mas resumindo já:"). NÃO invente detalhes que
+  deveriam vir do material (ex.: um exemplo ou tabela específica que só o bloco real
+  tem) — só o que você sabe com confiança por fora.`
 }
 
 export function montarMensagensEstudo(
@@ -568,61 +637,3 @@ export function montarMensagensEstudo(
 // (perfil + estudos + temas recentes de chat) e pede, em JSON, títulos
 // variados pro topo da tela + 1 sugestão por atalho (ou null, quando não há
 // sinal — a regra dura no fim é o que impede a IA de inventar contexto).
-export function montarPromptPainel(
-  perfil: Perfil | null,
-  estudos: StudySalvo[],
-  mensagensAbertura: string[],
-): string {
-  const linhas: string[] = []
-  linhas.push('Você é o motor de sugestões da tela inicial do Astrodny (o Painel).')
-  linhas.push(
-    'Gere, em JSON, títulos e sugestões curtas e naturais pra convidar o aluno a agir — ' +
-      'NUNCA invente atividade, curso, matéria ou prova que não esteja nos dados abaixo.',
-  )
-
-  linhas.push('')
-  linhas.push('# Perfil do aluno')
-  if (perfil?.curso) linhas.push(`Curso: ${perfil.curso}`)
-  if (perfil?.nivel) linhas.push(`Nível: ${perfil.nivel}`)
-  if (perfil?.materias?.length) linhas.push(`Matérias: ${perfil.materias.join(', ')}`)
-  if (!perfil?.curso && !perfil?.nivel && !perfil?.materias?.length) {
-    linhas.push('(sem dado de perfil ainda)')
-  }
-
-  linhas.push('')
-  linhas.push('# Estudos recentes (nome: acertos/total, data)')
-  if (estudos.length === 0) {
-    linhas.push('(nenhum estudo feito ainda)')
-  } else {
-    estudos
-      .slice(0, 10)
-      .forEach((e) => linhas.push(`- ${e.estudo.nome}: ${e.resultado.acertos}/${e.resultado.total}, em ${e.data}`))
-  }
-
-  linhas.push('')
-  linhas.push('# Temas recentes no chat (só a 1ª mensagem de cada conversa nova)')
-  if (mensagensAbertura.length === 0) {
-    linhas.push('(nenhuma conversa nova recente)')
-  } else {
-    mensagensAbertura.forEach((m) => linhas.push(`- "${m}"`))
-  }
-
-  linhas.push('')
-  linhas.push('# O que devolver (só o JSON, sem texto fora dele)')
-  linhas.push(`{
-  "titulos": ["2 a 3 variações curtas de título/pergunta pro topo da tela, tom convidativo"],
-  "sugestoes": {
-    "novoChat": "1 frase sugerindo um tema de conversa, OU null se não houver sinal",
-    "estudar": "1 frase sugerindo o que estudar, OU null se não houver sinal",
-    "trabalhos": "1 frase sugerindo um trabalho (ex.: ABNT), OU null se não houver sinal",
-    "provas": "1 frase sugerindo treinar pra uma prova ou concurso, OU null se não houver sinal"
-  }
-}`)
-  linhas.push('')
-  linhas.push(
-    'Regra dura: sem sinal suficiente pra algum campo, devolva null nele — NÃO force uma ' +
-      'sugestão genérica só pra preencher.',
-  )
-
-  return linhas.join('\n')
-}

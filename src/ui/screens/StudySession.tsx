@@ -7,10 +7,10 @@
 */
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import ReactMarkdown, { type Components } from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import { TextoIA, BotaoCopiar } from '../components/ChatTexto'
 import type {
   Study,
+  StudySalvo,
   Mode,
   Formato,
   EstudoConfig,
@@ -20,6 +20,7 @@ import type {
   CorrecaoDiscursiva,
   ResultadoProva,
   ResultadoProvaDiscursiva,
+  ConteudoItem,
 } from '../../domain/study'
 import type { Mensagem } from '../../domain/chat'
 import { buildStudy } from '../../application/buildStudy'
@@ -29,14 +30,15 @@ import { gradeExam } from '../../application/gradeExam'
 import { gradeDiscursiveAnswer, gradeDiscursiveExam, gradeCodeAnswer } from '../../application/gradeDiscursiveAnswer'
 import { extractContent } from '../../application/extractContent'
 import { studyChat, montarContextoEstudo } from '../../application/studyChat'
-import { ollamaProvider } from '../../infrastructure/ai/ollamaProvider'
 import { groqProvider, groqRapidoProvider, groqConfigurado } from '../../infrastructure/ai/groqProvider'
-import { fallbackProvider } from '../../infrastructure/ai/fallbackProvider'
+import { geminiProvider, geminiConfigurado } from '../../infrastructure/ai/geminiProvider'
 import { proxyProvider } from '../../infrastructure/ai/proxyProvider'
+import { fallbackProvider } from '../../infrastructure/ai/fallbackProvider'
 import { retryProvider } from '../../infrastructure/ai/retryProvider'
 import { pdfExtractor, contarPaginasPdf } from '../../infrastructure/documents/pdfExtractor'
 import { useStudies } from '../studies'
 import { useSettings } from '../settings'
+import { useAuth } from '../auth'
 import Sidebar from './Sidebar'
 import { AbasFluxo } from '../abas'
 
@@ -44,43 +46,76 @@ import { AbasFluxo } from '../abas'
 type Etapa = 'preparar' | 'analisando' | 'aula' | 'prova' | 'resultado'
 
 // EM PRODUÇÃO, tudo passa pelo nosso proxy (/api/*): ele guarda as chaves, roteia a cadeia
-// (Gemini→Groq) e coleta os dados. EM DEV, usamos os modelos direto (Ollama local etc.) pra
-// iterar de graça e offline. Trocar o "cérebro" é só trocar qual adaptador implementa a porta.
+// (Groq→Gemini) e coleta os dados. EM DEV, espelhamos a MESMA cadeia direto do navegador
+// (free tier), pra não ficar refém de um só provedor quando ele estourar o limite — foi
+// exatamente isso que travou o modo objetiva (só Groq, sem fallback, depois que tiramos o
+// Ollama). Trocar o "cérebro" é só trocar qual adaptador implementa a porta.
 const PROD = import.meta.env.PROD
-
-// Em DEV acessado pelo CELULAR (via IP da LAN), o Ollama do PC em `localhost` é
-// inalcançável (localhost no celular = o próprio celular). Nesse caso a IA do Estudar
-// vai pra NUVEM (Groq); no PC (localhost) segue no Ollama (grátis/offline).
-const devRemoto =
-  !PROD &&
-  typeof location !== 'undefined' &&
-  location.hostname !== 'localhost' &&
-  location.hostname !== '127.0.0.1'
+const provedoresDev = [...(groqConfigurado ? [groqProvider] : []), ...(geminiConfigurado ? [geminiProvider] : [])]
+// sem NENHUMA chave em dev: cai no Groq mesmo assim, só pra dar um erro claro ao
+// chamar (em vez de derrubar o módulo inteiro na hora de montar a cadeia).
+const cadeiaDev = fallbackProvider(provedoresDev.length ? provedoresDev : [groqProvider])
 
 // IA do dia a dia (correção discursiva, tira-dúvidas e aula do modo OBJETIVA).
-// retryProvider por fora: num pico de 429, espera (backoff) e tenta mais uma vez, em silêncio.
-const ia = retryProvider(PROD ? proxyProvider : devRemoto && groqConfigurado ? groqProvider : ollamaProvider)
-// Estágio 2 (prova): em prod vai pelo proxy; em dev, Groq direto (ou null → buildExam deriva dos blocos).
-const iaProva = PROD ? retryProvider(proxyProvider) : groqConfigurado ? retryProvider(groqProvider) : null
+// SEM retryProvider aqui: tanto proxyProvider (prod) quanto cadeiaDev (dev) JÁ SÃO
+// fallbackProvider por dentro (Groq→Gemini) — envolver de novo com retry faz a
+// cadeia INTEIRA rodar de novo a cada retentativa, martelando os MESMOS provedores
+// que acabaram de dizer "sem limite" (foi isso que gerou a enxurrada de 429/503 ao
+// vivo: cada etapa do Estudar rodava até 2x a cadeia de 2 provedores = 4 chamadas).
+const ia = PROD ? proxyProvider : cadeiaDev
+// Estágio 2 (prova): em prod vai pelo proxy (já é fallback, sem retry por fora); em
+// dev, Groq É um provedor ÚNICO (não uma cadeia) — aí sim o retry ajuda de verdade
+// (ou null → buildExam deriva dos blocos).
+const iaProva = PROD ? proxyProvider : groqConfigurado ? retryProvider(groqProvider) : null
 
 function StudySession() {
   const navigate = useNavigate()
   // tema que veio do botão "Montar estudo de X" no chat (Fase 2) — ver Home.tsx.
+  // OU uma sessão salva pra RETOMAR (botão "Continuar" em Sessões de Estudos) — nesse
+  // caso pulamos direto pra etapa 'aula', já com o Study e o bloco de onde parou.
   const location = useLocation()
-  const temaInicial = (location.state as { tema?: string } | null)?.tema
+  const estadoRota = location.state as { tema?: string; retomar?: StudySalvo } | null
+  const temaInicial = estadoRota?.tema
+  const retomar = estadoRota?.retomar
   const { salvarEstudo } = useStudies()
-  const [etapa, setEtapa] = useState<Etapa>('preparar')
+  const [etapa, setEtapa] = useState<Etapa>(retomar ? 'aula' : 'preparar')
   // começam SEM seleção (null): o aluno escolhe de propósito ao abrir o Estudar.
   const [modo, setModo] = useState<Mode | null>(null)
   // FORMATO das perguntas (o toggle por estudo): também sem padrão marcado.
   const [formato, setFormato] = useState<Formato | null>(null)
+  // categoria escolhida na tela Preparar (dropdown busca-ou-cria, ver CampoMateria) —
+  // controlada aqui (não dentro de Preparar) pra sobreviver a um "Refazer" (que
+  // desmonta e remonta a tela Preparar sem perder o que o aluno já escolheu).
+  const [materia, setMateria] = useState(retomar?.materia ?? 'Geral')
   const [arquivos, setArquivos] = useState<File[]>([]) // os PDFs anexados (material real)
   const [contexto, setContexto] = useState('') // pedido extra do aluno (foco/dificuldades)
   const [config, setConfig] = useState<EstudoConfig>({}) // ajustes opt-in (nº tópicos, código)
   const [erro, setErro] = useState<string | null>(null) // msg quando a leitura/estudo falha
-  const [estudo, setEstudo] = useState<Study | null>(null) // o que o caso de uso produziu
+  const [estudo, setEstudo] = useState<Study | null>(retomar?.estudo ?? null) // o que o caso de uso produziu
+  // nasce ao entrar na etapa 'aula' (não só no save final): progresso e resultado da
+  // MESMA sessão caem no mesmo registro salvo (upsert por id — ver StudyRepository).
+  const [sessaoId, setSessaoId] = useState<string | null>(retomar?.id ?? null)
   // o resultado é de MC (gradeExam) OU discursivo (gradeDiscursiveExam) — depende do formato
   const [resultado, setResultado] = useState<ResultadoProva | ResultadoProvaDiscursiva | null>(null)
+
+  // nome do PDF/pedido que originou o estudo — usado tanto no save de progresso
+  // (a cada bloco) quanto no save final (ao concluir a prova). Ao retomar, reusa a
+  // origem já salva (não há PDF/pedido novo nesta visita).
+  const origem =
+    retomar?.origem ?? (arquivos.map((a) => a.name).join(', ') || contexto.trim().slice(0, 60) || 'Estudo por chat')
+
+  function salvarProgresso(blocoAtual: number, totalBlocos: number) {
+    if (!sessaoId || !estudo) return
+    salvarEstudo({
+      id: sessaoId,
+      data: new Date().toISOString(),
+      origem,
+      materia,
+      estudo,
+      resultado: null,
+      progresso: { blocoAtual, totalBlocos },
+    })
+  }
 
   return (
     <div className="relative isolate overflow-hidden h-svh flex flex-col bg-[#2e2f36] text-white lg:flex-row">
@@ -100,10 +135,12 @@ function StudySession() {
         <Preparar
           modo={modo}
           formato={formato}
+          materia={materia}
           erro={erro}
           temaInicial={temaInicial}
           aoEscolherModo={setModo}
           aoEscolherFormato={setFormato}
+          aoEscolherMateria={setMateria}
           aoVoltar={() => navigate('/chat')}
           aoComecar={(pdfs, ctx, cfg) => {
             setArquivos(pdfs)
@@ -124,6 +161,7 @@ function StudySession() {
           config={config}
           aoConcluir={(novoEstudo) => {
             setEstudo(novoEstudo)
+            setSessaoId(Date.now().toString(36))
             setEtapa('aula')
           }}
           aoFalhar={(msg) => {
@@ -136,9 +174,11 @@ function StudySession() {
       {etapa === 'aula' && estudo && (
         <Aula
           estudo={estudo}
-          material={arquivos.map((a) => a.name).join(', ') || contexto.trim() || 'seu pedido'}
-          aoVoltar={() => setEtapa('preparar')}
+          material={arquivos.map((a) => a.name).join(', ') || contexto.trim() || origem}
+          blocoInicial={retomar?.progresso?.blocoAtual}
+          aoVoltar={() => (retomar ? navigate('/sessoes') : setEtapa('preparar'))}
           aoConcluir={() => setEtapa('prova')}
+          aoProgresso={salvarProgresso}
         />
       )}
 
@@ -150,12 +190,16 @@ function StudySession() {
             // salva no histórico só o MC por ora (StudySalvo ainda é MC; a persistência
             // do discursivo entra na frente do "salvar", junto com a área de comparação).
             if (estudo.formato === 'multipla_escolha' && 'acertos' in res) {
+              // mesmo id da sessão: conclui o MESMO registro que vinha recebendo o
+              // progresso (upsert) — sempre fecha como concluída, fonte de dado pra IA.
               salvarEstudo({
-                id: Date.now().toString(36),
+                id: sessaoId ?? Date.now().toString(36),
                 data: new Date().toISOString(),
-                origem: arquivos.map((a) => a.name).join(', ') || contexto.trim().slice(0, 60) || 'Estudo por chat',
+                origem,
+                materia,
                 estudo,
                 resultado: res,
+                progresso: null,
               })
             }
             setEtapa('resultado')
@@ -230,18 +274,12 @@ function Analisando({
             )
           }
         }
-        // Estágio 1 (aula): o modelo depende do MODO (completa = forte com fallback local;
-        // objetiva = local). Em prod, tudo pelo proxy.
+        // Estágio 1 (aula): em dev, os dois modos (objetiva/completa) usam a MESMA cadeia
+        // (Groq→Gemini) — a profundidade do ensino muda só pelo PROMPT (ver buildStudyPrompt),
+        // não pelo provedor. Em prod, tudo pelo proxy.
         setStatus('Separando os tópicos e montando a aula…')
-        const iaAula = retryProvider(
-          PROD
-            ? proxyProvider
-            : modo === 'completa' && groqConfigurado
-              ? fallbackProvider([groqProvider, ollamaProvider])
-              : devRemoto && groqConfigurado
-                ? groqProvider
-                : ollamaProvider,
-        )
+        // sem retryProvider aqui pelo mesmo motivo do `ia` acima: já é fallback por dentro.
+        const iaAula = PROD ? proxyProvider : cadeiaDev
         const estudo = await buildStudy(conteudo, modo, formato, iaAula, contexto, config)
         if (!vivo) return
         // Estágio 2: a prova é montada à parte e acoplada ao estudo.
@@ -254,7 +292,9 @@ function Analisando({
         // ESTRUTURA DE CHAT (única parte com IA): só se o aluno pediu um foco/contexto.
         // Modelo pequeno/rápido — Groq 8b-instant em dev, proxy em prod. Best-effort: se
         // não houver provider ou falhar, o painel segue só com os dados. Nunca trava.
-        const iaNarracao = PROD ? retryProvider(proxyProvider) : groqConfigurado ? retryProvider(groqRapidoProvider) : null
+        // proxyProvider (prod) já é fallback por dentro; groqRapidoProvider (dev) é
+        // provedor ÚNICO, aí o retry continua fazendo sentido.
+        const iaNarracao = PROD ? proxyProvider : groqConfigurado ? retryProvider(groqRapidoProvider) : null
         if (contexto.trim() && iaNarracao) {
           try {
             let acc = ''
@@ -456,12 +496,14 @@ const PLACEHOLDERS = [
 type PrepararProps = {
   modo: Mode | null
   formato: Formato | null
+  materia: string
   erro: string | null
   // tema que chegou do botão de ação do chat ("Montar estudo de X") — pré-preenche
   // o campo de pedido, mas NÃO avança: o aluno confirma modo/formato e decide.
   temaInicial?: string
   aoEscolherModo: (m: Mode) => void
   aoEscolherFormato: (f: Formato) => void
+  aoEscolherMateria: (m: string) => void
   aoVoltar: () => void
   aoComecar: (arquivos: File[], contexto?: string, config?: EstudoConfig) => void
 }
@@ -469,7 +511,18 @@ type PrepararProps = {
 // um PDF anexado + sua contagem de páginas (null enquanto ainda está sendo lida)
 type ItemArquivo = { arquivo: File; paginas: number | null }
 
-function Preparar({ modo, formato, erro, temaInicial, aoEscolherModo, aoEscolherFormato, aoVoltar, aoComecar }: PrepararProps) {
+function Preparar({
+  modo,
+  formato,
+  materia,
+  erro,
+  temaInicial,
+  aoEscolherModo,
+  aoEscolherFormato,
+  aoEscolherMateria,
+  aoVoltar,
+  aoComecar,
+}: PrepararProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const ctxRef = useRef<HTMLTextAreaElement>(null)
   const [itens, setItens] = useState<ItemArquivo[]>([])
@@ -608,6 +661,10 @@ function Preparar({ modo, formato, erro, temaInicial, aoEscolherModo, aoEscolher
             </div>
           )}
         </div>
+
+        {/* categoria do estudo — pré-configurada pelas matérias do perfil (logado) ou
+            pelas já usadas localmente (visitante); dropdown busca-ou-cria */}
+        <CampoMateria valor={materia} aoMudar={aoEscolherMateria} />
 
         {/* input escondido: abre o seletor de arquivos do celular/PC */}
         <input
@@ -867,6 +924,85 @@ function Preparar({ modo, formato, erro, temaInicial, aoEscolherModo, aoEscolher
         </div>
       </footer>
     </>
+  )
+}
+
+/* ===== Campo "Matéria": combobox busca-ou-cria, single-select =====
+   Sugestões vêm de `perfil.materias` (logado — e criar aqui persiste lá, mesmo
+   caminho do onboarding) ou, sem login, das matérias já usadas localmente nos
+   estudos salvos. Digitar um termo que não existe oferece "criar". */
+function CampoMateria({ valor, aoMudar }: { valor: string; aoMudar: (m: string) => void }) {
+  const { usuario, perfil, salvarPerfil } = useAuth()
+  const { estudos } = useStudies()
+  const [busca, setBusca] = useState(valor === 'Geral' ? '' : valor)
+  const [aberto, setAberto] = useState(false)
+
+  const sugestoesBase =
+    perfil?.materias && perfil.materias.length > 0
+      ? perfil.materias
+      : [...new Set(estudos.map((e) => e.materia).filter((m) => m && m !== 'Geral'))]
+  const termo = busca.trim().toLowerCase()
+  const filtradas = termo ? sugestoesBase.filter((m) => m.toLowerCase().includes(termo)) : sugestoesBase
+  const podeCriar = busca.trim().length > 0 && !sugestoesBase.some((m) => m.toLowerCase() === termo)
+
+  function confirmar(materiaEscolhida: string) {
+    const limpa = materiaEscolhida.trim()
+    if (!limpa) return
+    aoMudar(limpa)
+    setBusca(limpa)
+    setAberto(false)
+    if (usuario && perfil && !(perfil.materias ?? []).some((m) => m.toLowerCase() === limpa.toLowerCase())) {
+      salvarPerfil({ ...perfil, materias: [...(perfil.materias ?? []), limpa] })
+    }
+  }
+
+  return (
+    <div className="relative">
+      <label className="mb-1.5 block text-sm text-white/70">Matéria</label>
+      <input
+        value={busca}
+        onChange={(e) => {
+          setBusca(e.target.value)
+          setAberto(true)
+        }}
+        onFocus={() => setAberto(true)}
+        onBlur={() => setAberto(false)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            confirmar(podeCriar ? busca : (filtradas[0] ?? busca))
+          }
+          if (e.key === 'Escape') setAberto(false)
+        }}
+        placeholder="Ex.: Banco de Dados"
+        className="w-full rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-[15px] text-white outline-none placeholder:text-white/35 focus:border-white/40"
+      />
+      {aberto && (filtradas.length > 0 || podeCriar) && (
+        <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-white/15 bg-[#141416] shadow-xl">
+          {filtradas.map((m) => (
+            <button
+              key={m}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => confirmar(m)}
+              className="block w-full px-4 py-2.5 text-left text-[14px] text-white/85 hover:bg-white/5"
+            >
+              {m}
+            </button>
+          ))}
+          {podeCriar && (
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => confirmar(busca)}
+              className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-[14px] text-white/85 hover:bg-white/5"
+            >
+              <span className="text-white/50">+</span> Criar "{busca.trim()}"
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -1207,60 +1343,108 @@ function CartaoExercicioCodigo({
   )
 }
 
-// Markdown da AULA: o conteúdo dos blocos agora é renderizado como markdown — assim
-// CÓDIGO em bloco (```java ... ```) aparece formatado (monoespaçado, com rolagem), em vez
-// de espremido numa linha de texto corrido. Negrito/listas também passam a funcionar.
-const mdAula: Components = {
-  // parágrafo que começa com "Exemplo:" (prompt pede esse prefixo pros exemplos de cada
-  // tópico) ganha destaque visual — fica claro que é um caso aplicado, não texto corrido.
-  p: ({ children }) => {
-    const primeiro = Array.isArray(children) ? children[0] : children
-    const ehExemplo = typeof primeiro === 'string' && primeiro.trimStart().startsWith('Exemplo:')
-    return ehExemplo ? (
-      <p className="mb-3 last:mb-0 rounded-lg border-l-2 border-amber-400/60 bg-white/5 px-3 py-2">
-        {children}
-      </p>
-    ) : (
-      <p className="mb-3 last:mb-0">{children}</p>
-    )
-  },
-  strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
-  em: ({ children }) => <em className="italic">{children}</em>,
-  ul: ({ children }) => <ul className="mb-3 ml-4 list-disc space-y-1">{children}</ul>,
-  ol: ({ children }) => <ol className="mb-3 ml-4 list-decimal space-y-1">{children}</ol>,
-  li: ({ children }) => <li>{children}</li>,
-  code: ({ className, children }) => {
-    // bloco = tem linguagem (```java) OU é multilinha; senão é código inline (pílula).
-    const bloco = /language-/.test(className ?? '') || String(children).includes('\n')
-    return bloco ? (
-      <code className={`${className ?? ''} font-mono text-[13px]`}>{children}</code>
-    ) : (
-      <code className="rounded bg-white/10 px-1 py-0.5 font-mono text-[13px]">{children}</code>
-    )
-  },
-  pre: ({ children }) => (
-    <pre className="mb-3 overflow-x-auto rounded-lg bg-black/40 p-3 text-[13px] leading-relaxed">{children}</pre>
-  ),
+// Prefixo de cada item do "conteudo" → como ele é destacado na tela. "Exemplo:" e
+// "Problema:" ganham borda/fundo (igual já existia); "Conclusão:" fecha o bloco em
+// texto menor e apagado (reforça a ideia principal sem "gritar"). Sem prefixo = parágrafo normal.
+// Quando o item TEM uma tabela dentro, a borda colorida NÃO entra — a tabela fica neutra
+// (fundo preto, sem acento), só o texto em volta (se houver) ganha o destaque.
+function wrapperConteudo(item: string): { className: string | null } {
+  const texto = item.trimStart()
+  if (texto.startsWith('Exemplo:')) {
+    return { className: 'rounded-lg border-l-2 border-amber-400/60 bg-white/5 px-4 py-3' }
+  }
+  if (texto.startsWith('Problema:')) {
+    return { className: 'rounded-lg border-l-2 border-rose-400/60 bg-white/5 px-4 py-3' }
+  }
+  if (texto.startsWith('Conclusão:')) {
+    return { className: 'text-xs text-white/50' }
+  }
+  return { className: null }
+}
+
+// Rede de segurança: se por algum motivo um item de TEXTO ainda vier com uma tabela
+// markdown espremida dentro da string (modelo antigo/bug de geração), detecta e aplica
+// o mesmo tratamento neutro/preto — mas o caminho normal agora é o item ESTRUTURADO
+// (ver TabelaConteudo abaixo), que não depende de parsing de markdown pra tabela.
+const TEM_TABELA = /\|\s*:?-{2,}:?\s*\|/
+
+// Tabela ESTRUTURADA (ver domain/study.ts TabelaConteudo): desenhada DIRETO em JSX, sem
+// markdown no meio — por isso nunca quebra por newline mal escapado. Fundo preto sólido,
+// sem o acento colorido do card de Problema/Exemplo (pedido explícito do usuário), com
+// mais respiro que uma tabela comum do chat.
+function TabelaConteudoView({ tabela }: { tabela: Extract<ConteudoItem, { tipo: 'tabela' }> }) {
+  return (
+    <div className="mb-4 last:mb-0">
+      {tabela.legenda && <p className="mb-2 text-sm text-white/70">{tabela.legenda}</p>}
+      <div className="scroll-chat overflow-x-auto rounded-xl border border-white/10 bg-black font-sans">
+        <table className="w-full border-collapse text-sm">
+          <thead className="bg-white/[0.04]">
+            <tr>
+              {tabela.cabecalho.map((c, k) => (
+                <th key={k} className="whitespace-nowrap border-b border-white/15 px-5 py-3.5 text-left font-semibold text-white">
+                  {c}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {tabela.linhas.map((linha, i) => (
+              <tr key={i} className="even:bg-white/[0.02]">
+                {linha.map((c, k) => (
+                  <td key={k} className="border-b border-white/[0.07] px-5 py-3.5 align-top leading-relaxed text-white/80">
+                    {c}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function ItemConteudo({ item }: { item: ConteudoItem }) {
+  if (typeof item !== 'string') return <TabelaConteudoView tabela={item} />
+
+  const ehTabelaCrua = TEM_TABELA.test(item) // defensivo — ver comentário acima
+  const { className } = wrapperConteudo(item)
+  const corpo = <TextoIA texto={item} tabelaPreta={ehTabelaCrua} />
+  if (ehTabelaCrua) return <div className="mb-4 last:mb-0">{corpo}</div>
+  return className ? <div className={`mb-4 last:mb-0 ${className}`}>{corpo}</div> : <div className="mb-3 last:mb-0">{corpo}</div>
 }
 
 /* ===== Tela 3: Aula (ensina o bloco + pergunta + tira-dúvidas fixo) ===== */
 function Aula({
   estudo,
   material,
+  blocoInicial,
   aoVoltar,
   aoConcluir,
+  aoProgresso,
 }: {
   estudo: Study
   material: string
+  // ao RETOMAR uma sessão salva (ver SessoesEstudo "Continuar"), entra direto no
+  // bloco onde o aluno parou em vez de sempre começar do zero.
+  blocoInicial?: number
   aoVoltar: () => void
   aoConcluir: () => void
+  // chamado ao entrar e a cada troca de bloco — quem persiste é o pai (StudySession),
+  // que sabe o id/matéria da sessão; aqui só reporta "onde o aluno está agora".
+  aoProgresso?: (blocoAtual: number, totalBlocos: number) => void
 }) {
   const { personalidade } = useSettings()
-  const [i, setI] = useState(0)
+  const [i, setI] = useState(blocoInicial ?? 0)
   const [fase, setFase] = useState<'ensino' | 'exercicio' | 'pergunta'>('ensino')
   const total = estudo.blocos.length
   const bloco = estudo.blocos[i]
   const ultimo = i === total - 1
+
+  useEffect(() => {
+    aoProgresso?.(i, total)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [i])
 
   // Tira-dúvidas DO BLOCO ATUAL (camada de suporte; não avança o estudo).
   // Escopado ao bloco: ao trocar de bloco, zera — o contexto muda com ele.
@@ -1344,9 +1528,9 @@ function Aula({
           // Fase 1: a IA ensina (so o conteudo + botao pra ir pra pergunta)
           <>
             <div className="text-sm leading-relaxed text-white/80">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdAula}>
-                {bloco.conteudo.join('\n\n')}
-              </ReactMarkdown>
+              {bloco.conteudo.map((item, idx) => (
+                <ItemConteudo key={idx} item={item} />
+              ))}
             </div>
             {/* o avanço ensino -> pergunta agora é o botão DUAL do rodapé (seta pra direita
                 quando o input está vazio). Dica discreta pro aluno achar o controle: */}
@@ -1387,12 +1571,20 @@ function Aula({
           <div className="mt-2 flex flex-col gap-3 border-t border-white/10 pt-4">
             {conversa.map((m, k) =>
               m.autor === 'user' ? (
-                <div key={k} className="self-end max-w-[85%] whitespace-pre-wrap break-words rounded-2xl bg-[#142073] px-3 py-2 text-sm">
-                  {m.texto}
+                <div key={k} className="animar-subida self-end flex max-w-[85%] flex-col items-end">
+                  <div className="whitespace-pre-wrap break-words rounded-3xl bg-[#142073] px-4 py-2 font-sans text-[15px]">
+                    {m.texto}
+                  </div>
+                  <div className="mt-0.5">
+                    <BotaoCopiar texto={m.texto} titulo="Copiar mensagem" />
+                  </div>
                 </div>
               ) : (
-                <div key={k} className="whitespace-pre-wrap break-words text-sm leading-relaxed text-white/85">
-                  {m.texto}
+                <div key={k} className="animar-subida break-words font-sans text-[15px] leading-relaxed text-white/90">
+                  <TextoIA texto={m.texto} />
+                  <div className="mt-1 flex items-center gap-2">
+                    <BotaoCopiar texto={m.texto} titulo="Copiar resposta" />
+                  </div>
                 </div>
               ),
             )}
@@ -1409,7 +1601,7 @@ function Aula({
 
       {/* INPUT FIXO: o controle é do aluno — ele pergunta a qualquer momento,
           sem travar o fluxo (pedir outro exemplo, tirar dúvida de um tópico…). */}
-      <footer className="absolute bottom-0 inset-x-0 z-20 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-6 bg-gradient-to-t from-[#0a0d1f] via-[#0a0d1f]/85 to-transparent translate-y-[calc(-1*var(--kb,0px))] transition-transform duration-200 ease-out lg:mx-auto lg:max-w-[860px]">
+      <footer className="absolute bottom-0 inset-x-0 z-20 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-6 bg-gradient-to-t from-[#0a0d1f] via-[#0a0d1f]/85 to-transparent translate-y-[calc(-1*var(--kb,0px))] transition-transform duration-200 ease-out lg:bg-none lg:pt-2 lg:mx-auto lg:max-w-[860px]">
         <div
           className={`flex items-center gap-2 rounded-full border backdrop-blur-md pl-4 pr-2 py-1.5 transition-colors duration-200 ${
             duvidaFocada ? 'border-white/80 bg-white/10' : 'border-white/50 bg-white/5'
