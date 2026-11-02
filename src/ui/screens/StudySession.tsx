@@ -1171,7 +1171,7 @@ function CartaoPerguntaDiscursiva({
   aoProximo,
 }: {
   pergunta: QuestionDiscursiva
-  conteudoBloco: string[]
+  conteudoBloco: ConteudoItem[]
   rotuloProximo: string
   aoProximo: (correcao: CorrecaoDiscursiva) => void
 }) {
@@ -1268,7 +1268,7 @@ function CartaoExercicioCodigo({
   aoProximo,
 }: {
   exercicio: ExercicioCodigo
-  conteudoBloco: string[]
+  conteudoBloco: ConteudoItem[]
   rotuloProximo: string
   aoProximo: () => void
 }) {
