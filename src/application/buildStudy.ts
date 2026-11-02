@@ -41,6 +41,16 @@ const PAUSA_ENTRE_TENTATIVAS_MS = 1200
 const TETO_ESPERA_MS = 45_000
 const dormir = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
+// Teto de saída explícito (sem isso, o Groq usa um padrão ~3072 pro gpt-oss-120b).
+// Testado contra um PDF denso (45 págs/SQL): sem isso, a resposta vinha com
+// finish_reason "length" (cortada no meio do JSON — gerava erro de validação ou
+// perdia blocos inteiros, ex.: parava antes de chegar em JOIN). Com 6000, a mesma
+// aula terminou com finish_reason "stop" (completa) e cobriu 1 tópico a mais.
+// NÃO é de graça: o modelo "pensa" mais com mais espaço (reasoning_tokens subiu de
+// ~1600 pra ~2000 no teste), então o custo por chamada sobe — mas trocar "falha
+// garantida" por "funciona, só mais caro" vale a pena.
+const MAX_COMPLETION_TOKENS = 6000
+
 export async function buildStudy(
   content: string,
   mode: Mode,
@@ -57,7 +67,7 @@ export async function buildStudy(
   for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
     try {
       // json:true => pedimos JSON válido ao modelo (no Groq, ativa response_format json_object).
-      const resposta = await ai.generate(prompt, { json: true, signal })
+      const resposta = await ai.generate(prompt, { json: true, signal, maxCompletionTokens: MAX_COMPLETION_TOKENS })
       const bruto = extrairJson(resposta) // texto -> objeto (lança se malformado)
       return validarStudy(bruto, formato) // objeto -> Study (só a aula; prova vem no estágio 2)
     } catch (e) {
