@@ -27,6 +27,20 @@ function headers() {
   return { 'Content-Type': 'application/json', Authorization: `Bearer ${KEY}` }
 }
 
+// Lê o tempo de espera sugerido pelo Groq (retry-after em segundos, e/ou
+// x-ratelimit-reset-tokens tipo "1.2s"/"592ms") e normaliza pra ms — mesma lógica do
+// lado servidor (api/_lib/providers.ts), usada pelo retry de buildStudy/buildTrabalho.
+function esperaSugeridaMs(r: Response): number | undefined {
+  const retryAfter = r.headers.get('retry-after')
+  if (retryAfter) return Number(retryAfter) * 1000
+  const resetTokens = r.headers.get('x-ratelimit-reset-tokens')
+  if (resetTokens) {
+    const m = /^([\d.]+)(ms|s)$/.exec(resetTokens.trim())
+    if (m) return Number(m[1]) * (m[2] === 's' ? 1000 : 1)
+  }
+  return undefined
+}
+
 // Fábrica: cria um adaptador Groq amarrado a um MODELO específico. Assim o modelo
 // forte e o pequeno compartilham toda a lógica de fetch/SSE sem duplicação.
 function criarGroqProvider(modelo: string): AIProvider {
@@ -44,9 +58,10 @@ function criarGroqProvider(modelo: string): AIProvider {
           ...(opcoes?.reasoningEffort ? { reasoning_effort: opcoes.reasoningEffort } : {}),
           ...(opcoes?.maxCompletionTokens ? { max_completion_tokens: opcoes.maxCompletionTokens } : {}),
         }),
+        signal: opcoes?.signal,
       })
       if (!r.ok) {
-        if (ehStatusDeLimite(r.status)) throw new IALimiteError(undefined, r.status)
+        if (ehStatusDeLimite(r.status)) throw new IALimiteError(undefined, r.status, esperaSugeridaMs(r))
         throw new Error(`Groq respondeu ${r.status}`)
       }
       const d = await r.json()
@@ -66,7 +81,7 @@ function criarGroqProvider(modelo: string): AIProvider {
         }),
       })
       if (!r.ok || !r.body) {
-        if (ehStatusDeLimite(r.status)) throw new IALimiteError(undefined, r.status)
+        if (ehStatusDeLimite(r.status)) throw new IALimiteError(undefined, r.status, esperaSugeridaMs(r))
         throw new Error(`Groq respondeu ${r.status}`)
       }
 

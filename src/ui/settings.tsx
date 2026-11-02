@@ -16,6 +16,10 @@ type SettingsContexto = {
   config: Config
   personalidade: Personalidade // atalho pro campo mais usado
   definirPersonalidade: (p: Personalidade) => void
+  groqApiKey: string
+  definirGroqApiKey: (chave: string) => void
+  geminiApiKey: string
+  definirGeminiApiKey: (chave: string) => void
 }
 
 const Contexto = createContext<SettingsContexto | null>(null)
@@ -33,8 +37,26 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setConfig((prev) => ({ ...prev, personalidade: p }))
   }
 
+  function definirGroqApiKey(chave: string) {
+    setConfig((prev) => ({ ...prev, groqApiKey: chave.trim() }))
+  }
+
+  function definirGeminiApiKey(chave: string) {
+    setConfig((prev) => ({ ...prev, geminiApiKey: chave.trim() }))
+  }
+
   return (
-    <Contexto.Provider value={{ config, personalidade: config.personalidade, definirPersonalidade }}>
+    <Contexto.Provider
+      value={{
+        config,
+        personalidade: config.personalidade,
+        definirPersonalidade,
+        groqApiKey: config.groqApiKey,
+        definirGroqApiKey,
+        geminiApiKey: config.geminiApiKey,
+        definirGeminiApiKey,
+      }}
+    >
       {children}
     </Contexto.Provider>
   )

@@ -48,11 +48,17 @@ export default async function handler(request: Request): Promise<Response> {
     personalidade?: Personalidade
     perfil?: Perfil
     contextoEstudo?: ContextoEstudo
+    geminiApiKey?: string
   }
   try {
     corpo = await request.json()
   } catch {
     return new Response('Corpo inválido (esperava JSON).', { status: 400, headers: cors })
+  }
+
+  const geminiApiKey = corpo.geminiApiKey?.trim()
+  if (!geminiApiKey) {
+    return new Response('Configure sua chave Gemini em Configurações pra usar o chat.', { status: 400, headers: cors })
   }
 
   const messages = corpo.messages
@@ -94,7 +100,7 @@ export default async function handler(request: Request): Promise<Response> {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        for await (const pedaco of cadeiaChat().generateStream(mensagensFinais)) {
+        for await (const pedaco of cadeiaChat(geminiApiKey).generateStream(mensagensFinais)) {
           completo += pedaco
           controller.enqueue(encoder.encode(pedaco))
         }

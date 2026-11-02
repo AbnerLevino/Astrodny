@@ -19,10 +19,14 @@ import type { ContextoEstudo } from '../../domain/studyChat'
 // Usado pelo buildTrabalho: "low" evita que o modelo gaste tempo/tokens "pensando"
 // numa tarefa que é só ESTRUTURAR texto já pronto (não criar conteúdo), e o teto de
 // tokens generoso dá espaço pra trabalhos acadêmicos longos (TCC com várias seções).
+// `signal`: opcional e aditivo — permite abortar a requisição em voo (ex.: o aluno saiu
+// da tela no meio da geração). Só quem usa (proxyProvider, providers client-dev) repassa
+// pro `fetch` nativo; quem não usa simplesmente ignora o campo, sem quebrar nada.
 export type GenerateOptions = {
   json?: boolean
   reasoningEffort?: 'low' | 'medium' | 'high'
   maxCompletionTokens?: number
+  signal?: AbortSignal
 }
 
 // Uma mensagem de CONVERSA com papel (role) explícito — é como toda API de chat de

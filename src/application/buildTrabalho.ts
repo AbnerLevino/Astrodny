@@ -14,10 +14,13 @@ import type { AIProvider } from './ports/AIProvider'
 import type { Secao, Citacao } from '../domain/trabalho'
 import { buildTrabalhoPrompt } from './prompts'
 import { comoObjeto, comoLista, comoTexto, comoNumero } from './validacao'
-import { IALimiteError, ehLimite } from './ports/aiErrors'
+import { IALimiteError, ehLimite, ehSemChave } from './ports/aiErrors'
 
-const MAX_TENTATIVAS = 2
+// Mesmo ajuste do buildStudy.ts: 3 tentativas (era 2) + espera real sugerida pelo
+// provedor em vez de uma pausa fixa cega — ver comentário completo em buildStudy.ts.
+const MAX_TENTATIVAS = 3
 const PAUSA_ENTRE_TENTATIVAS_MS = 1200
+const TETO_ESPERA_MS = 45_000
 const dormir = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
 // "low": a tarefa é ESTRUTURAR texto que o aluno já escreveu, nunca criar conteúdo —
@@ -36,6 +39,7 @@ export async function buildTrabalho(
   textoColado: string,
   ai: AIProvider,
   correcao?: { estadoAtual: EstruturaTrabalho; instrucao: string },
+  aoEsperar?: (ms: number) => void, // avisa a UI antes de cada espera por rate limit
 ): Promise<EstruturaTrabalho> {
   const prompt = buildTrabalhoPrompt(
     textoColado,
@@ -54,9 +58,14 @@ export async function buildTrabalho(
       const bruto = extrairJson(resposta)
       return validarEstrutura(bruto)
     } catch (e) {
+      if (ehSemChave(e)) throw e // não é transitório: propaga sem re-tentar nem embrulhar
       ultimoErro = e
       console.warn(`buildTrabalho: tentativa ${tentativa}/${MAX_TENTATIVAS} falhou:`, e)
-      if (tentativa < MAX_TENTATIVAS) await dormir(PAUSA_ENTRE_TENTATIVAS_MS)
+      if (tentativa < MAX_TENTATIVAS) {
+        const espera = ehLimite(e) && e.esperaMs ? Math.min(e.esperaMs, TETO_ESPERA_MS) : PAUSA_ENTRE_TENTATIVAS_MS
+        aoEsperar?.(espera)
+        await dormir(espera)
+      }
     }
   }
 

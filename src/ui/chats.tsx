@@ -19,7 +19,7 @@ import { openrouterProvider, openrouterConfigurado } from '../infrastructure/ai/
 import { fallbackProvider } from '../infrastructure/ai/fallbackProvider'
 import { proxyProvider } from '../infrastructure/ai/proxyProvider'
 import { retryProvider } from '../infrastructure/ai/retryProvider'
-import { ehLimite } from '../application/ports/aiErrors'
+import { ehLimite, ehSemChave } from '../application/ports/aiErrors'
 import { localStorageChatRepository } from '../infrastructure/storage/localStorageChatRepository'
 import { useSettings } from './settings'
 import { useAuth } from './auth'
@@ -168,9 +168,11 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
       if (controller.signal.aborted) {
         // nada: o aluno mandou parar
       } else {
-        const aviso = ehLimite(e)
-          ? '⚠️ A IA está sobrecarregada agora. Tente de novo em alguns instantes.'
-          : '⚠️ Não consegui responder agora. Tente de novo.'
+        const aviso = ehSemChave(e)
+          ? e.message
+          : ehLimite(e)
+            ? '⚠️ A IA está sobrecarregada agora. Tente de novo em alguns instantes.'
+            : '⚠️ Não consegui responder agora. Tente de novo.'
         if (!iaCriada) adicionarMensagemIA(id, aviso)
         else anexarNaUltima(id, '\n\n' + aviso)
       }

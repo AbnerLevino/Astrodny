@@ -43,11 +43,17 @@ export default async function handler(request: Request): Promise<Response> {
     type?: TipoEvento
     subject?: string
     device?: string
+    groqApiKey?: string
   }
   try {
     corpo = await request.json()
   } catch {
     return json({ error: 'Corpo inválido (esperava JSON).' }, 400, cors)
+  }
+
+  const groqApiKey = corpo.groqApiKey?.trim()
+  if (!groqApiKey) {
+    return json({ error: 'Configure sua chave Groq em Configurações pra usar a IA.' }, 400, cors)
   }
 
   const prompt = corpo.prompt
@@ -60,7 +66,7 @@ export default async function handler(request: Request): Promise<Response> {
   }
 
   try {
-    const text = await cadeiaServidor().generate(prompt, {
+    const text = await cadeiaServidor(groqApiKey).generate(prompt, {
       json: corpo.json,
       reasoningEffort: corpo.reasoningEffort,
       maxCompletionTokens: corpo.maxCompletionTokens,

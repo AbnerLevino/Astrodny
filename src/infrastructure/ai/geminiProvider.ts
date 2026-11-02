@@ -18,6 +18,19 @@ const BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
 
 export const geminiConfigurado = KEY.length > 0
 
+// Mesma lógica do lado servidor (api/_lib/providers.ts) e do groqProvider client-dev:
+// lê o tempo de espera sugerido pelo provedor e normaliza pra ms.
+function esperaSugeridaMs(r: Response): number | undefined {
+  const retryAfter = r.headers.get('retry-after')
+  if (retryAfter) return Number(retryAfter) * 1000
+  const resetTokens = r.headers.get('x-ratelimit-reset-tokens')
+  if (resetTokens) {
+    const m = /^([\d.]+)(ms|s)$/.exec(resetTokens.trim())
+    if (m) return Number(m[1]) * (m[2] === 's' ? 1000 : 1)
+  }
+  return undefined
+}
+
 // Gemini não tem role 'system' em contents[] — a instrução fixa vai à parte, em
 // systemInstruction. 'assistant' também não existe pra ele: o papel chama 'model'.
 function corpo(prompt: PromptInput, json?: boolean) {
@@ -42,9 +55,10 @@ export const geminiProvider: AIProvider = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: corpo(prompt, opcoes?.json),
+      signal: opcoes?.signal,
     })
     if (!r.ok) {
-      if (ehStatusDeLimite(r.status)) throw new IALimiteError(undefined, r.status)
+      if (ehStatusDeLimite(r.status)) throw new IALimiteError(undefined, r.status, esperaSugeridaMs(r))
       throw new Error(`Gemini respondeu ${r.status}`)
     }
     const d = await r.json()
@@ -59,7 +73,7 @@ export const geminiProvider: AIProvider = {
       body: corpo(prompt),
     })
     if (!r.ok || !r.body) {
-      if (ehStatusDeLimite(r.status)) throw new IALimiteError(undefined, r.status)
+      if (ehStatusDeLimite(r.status)) throw new IALimiteError(undefined, r.status, esperaSugeridaMs(r))
       throw new Error(`Gemini respondeu ${r.status}`)
     }
 

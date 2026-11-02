@@ -21,9 +21,18 @@ const JANELA_SEGUNDOS = 60
 // chamada e "reseta" o limite sempre). O ÚLTIMO item é o que a borda da Vercel (o hop
 // mais próximo do servidor, que o cliente não controla) efetivamente observou — é esse
 // que usamos como chave do rate limit.
+//
+// `x-real-ip` NÃO é usado: ao contrário do `x-forwarded-for`, a Vercel não garante que
+// esse header seja definido pela própria borda (não é um padrão universal — é convenção
+// de proxies como nginx, configurados explicitamente). Um cliente pode mandar qualquer
+// valor nele, e como não há acúmulo (não é uma lista), um atacante zera o rate limit a
+// cada requisição só variando esse header.
+//
+// Premissa desta função: a Vercel é o ÚNICO proxy na frente do nosso código. Se algum
+// dia entrar outro proxy antes da Vercel (CDN, WAF, etc.), o "último item" do
+// `x-forwarded-for` passa a ser o IP desse proxy, não o do cliente real — a mesma classe
+// de problema que corrigimos aqui, só um hop mais pra fora. Reavaliar se isso mudar.
 export function ipDaRequisicao(request: Request): string {
-  const direto = request.headers.get('x-real-ip')?.trim()
-  if (direto) return direto
   const encaminhados = request.headers.get('x-forwarded-for')
   if (!encaminhados) return 'desconhecido'
   const partes = encaminhados.split(',').map((p) => p.trim()).filter(Boolean)

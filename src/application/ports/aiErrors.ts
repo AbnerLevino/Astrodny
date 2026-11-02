@@ -18,13 +18,18 @@
 
 export class IALimiteError extends Error {
   readonly status?: number
+  // tempo sugerido de espera (ms), lido de `retry-after`/`x-ratelimit-reset-tokens` da
+  // resposta real do provedor — quando ausente, quem re-tenta cai num valor fixo próprio.
+  readonly esperaMs?: number
   constructor(
     mensagem = 'A IA está sobrecarregada no momento. Tente de novo em instantes.',
     status?: number,
+    esperaMs?: number,
   ) {
     super(mensagem)
     this.name = 'IALimiteError'
     this.status = status
+    this.esperaMs = esperaMs
   }
 }
 
@@ -37,4 +42,18 @@ export function ehStatusDeLimite(status: number): boolean {
 // type guard: permite `if (ehLimite(e))` com o TypeScript estreitando o tipo.
 export function ehLimite(erro: unknown): erro is IALimiteError {
   return erro instanceof IALimiteError
+}
+
+// BYOK: falta de chave do USUÁRIO (não configurou em Configurações). Ao contrário de
+// IALimiteError, NÃO é transitório — re-tentar não resolve, então quem trata isto
+// (retry/UI) deve propagar direto, nunca re-tentar nem esperar.
+export class IASemChaveError extends Error {
+  constructor(mensagem: string) {
+    super(mensagem)
+    this.name = 'IASemChaveError'
+  }
+}
+
+export function ehSemChave(erro: unknown): erro is IASemChaveError {
+  return erro instanceof IASemChaveError
 }

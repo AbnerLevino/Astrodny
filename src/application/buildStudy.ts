@@ -24,14 +24,21 @@ import type { AIProvider } from './ports/AIProvider'
 import type { Mode, Formato, Study, Block, EstudoConfig } from '../domain/study'
 import { buildStudyPrompt } from './prompts'
 import { comoObjeto, comoLista, comoTexto, validarPergunta, validarExercicioCodigo, validarConteudoItem } from './validacao'
-import { IALimiteError, ehLimite } from './ports/aiErrors'
+import { IALimiteError, ehLimite, ehSemChave } from './ports/aiErrors'
 
-// Quantas vezes pedir à IA antes de desistir (a 1ª + 1 retry).
-const MAX_TENTATIVAS = 2
+// Quantas vezes pedir à IA antes de desistir. 3 (era 2): com o retry agora esperando o
+// tempo REAL sugerido pelo provedor (ver TETO_ESPERA_MS abaixo), uma 3ª tentativa tem
+// chance real de vingar num caso de rate limit — antes, com espera fixa e curta, só
+// bateria no mesmo teto de novo.
+const MAX_TENTATIVAS = 3
 
-// Pausa ENTRE as tentativas. Sem ela, a 2ª chamada sai logo após a 1ª (rajada) e,
-// num pico de rate limit, as duas estouram juntas (429). Uma pausa curta dá fôlego.
+// Pausa ENTRE as tentativas quando NÃO há espera real sugerida pelo provedor (erro que
+// não é de limite, ou limite sem o header). Sem ela, a 2ª chamada sai logo após a 1ª
+// (rajada) e, num pico de rate limit, as duas estouram juntas (429).
 const PAUSA_ENTRE_TENTATIVAS_MS = 1200
+// Teto de segurança pra espera real (retry-after/x-ratelimit-reset-tokens): nunca trava
+// a pessoa além disso, mesmo se o provedor sugerir um valor absurdo.
+const TETO_ESPERA_MS = 45_000
 const dormir = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
 export async function buildStudy(
@@ -41,6 +48,8 @@ export async function buildStudy(
   ai: AIProvider,
   contexto?: string, // pedido extra do aluno (dificuldades, foco…) — opcional
   config?: EstudoConfig, // ajustes opt-in (nº de tópicos, código) — opcional
+  aoEsperar?: (ms: number) => void, // avisa a UI antes de cada espera por rate limit
+  signal?: AbortSignal, // aborta a chamada em voo se o aluno saiu da tela no meio
 ): Promise<Study> {
   const prompt = buildStudyPrompt(content, mode, formato, contexto, config)
 
@@ -48,14 +57,20 @@ export async function buildStudy(
   for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
     try {
       // json:true => pedimos JSON válido ao modelo (no Groq, ativa response_format json_object).
-      const resposta = await ai.generate(prompt, { json: true })
+      const resposta = await ai.generate(prompt, { json: true, signal })
       const bruto = extrairJson(resposta) // texto -> objeto (lança se malformado)
       return validarStudy(bruto, formato) // objeto -> Study (só a aula; prova vem no estágio 2)
     } catch (e) {
+      if (ehSemChave(e)) throw e // não é transitório: propaga sem re-tentar nem embrulhar
       ultimoErro = e
       console.warn(`buildStudy: tentativa ${tentativa}/${MAX_TENTATIVAS} falhou:`, e)
-      // espaça a próxima tentativa (menos na última, que não vai re-tentar)
-      if (tentativa < MAX_TENTATIVAS) await dormir(PAUSA_ENTRE_TENTATIVAS_MS)
+      // espaça a próxima tentativa (menos na última, que não vai re-tentar): usa a espera
+      // REAL sugerida pelo provedor se vier (com teto de segurança), senão a pausa fixa.
+      if (tentativa < MAX_TENTATIVAS) {
+        const espera = ehLimite(e) && e.esperaMs ? Math.min(e.esperaMs, TETO_ESPERA_MS) : PAUSA_ENTRE_TENTATIVAS_MS
+        aoEsperar?.(espera)
+        await dormir(espera)
+      }
     }
   }
 

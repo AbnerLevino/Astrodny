@@ -55,6 +55,9 @@ const provedoresDev = [...(groqConfigurado ? [groqProvider] : []), ...(geminiCon
 // sem NENHUMA chave em dev: cai no Groq mesmo assim, só pra dar um erro claro ao
 // chamar (em vez de derrubar o módulo inteiro na hora de montar a cadeia).
 const cadeiaDev = fallbackProvider(provedoresDev.length ? provedoresDev : [groqProvider])
+// mesma função de 1 linha já duplicada em buildStudy.ts/buildTrabalho.ts/retryProvider.ts
+// (não é exportada de nenhum deles) — usada pro respiro entre aula e prova (ver abaixo).
+const dormir = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
 // IA do dia a dia (correção discursiva, tira-dúvidas e aula do modo OBJETIVA).
 // SEM retryProvider aqui: tanto proxyProvider (prod) quanto cadeiaDev (dev) JÁ SÃO
@@ -257,6 +260,11 @@ function Analisando({
 
   useEffect(() => {
     let vivo = true
+    // Sem AbortController, o StrictMode do dev (ou qualquer re-render que recrie
+    // `aoFalhar` durante a geração) deixava a chamada anterior rodando em paralelo,
+    // desperdiçando cota à toa. Abortamos a chamada em voo sempre que o efeito
+    // reexecuta ou a tela é desmontada (aluno saiu no meio).
+    const controller = new AbortController()
 
     // roda a sequência real: extrair texto do(s) PDF(s) -> montar o estudo -> narrar.
     // Se qualquer etapa de MONTAGEM falhar, avisamos (aoFalhar) em vez de travar.
@@ -280,7 +288,20 @@ function Analisando({
         setStatus('Separando os tópicos e montando a aula…')
         // sem retryProvider aqui pelo mesmo motivo do `ia` acima: já é fallback por dentro.
         const iaAula = PROD ? proxyProvider : cadeiaDev
-        const estudo = await buildStudy(conteudo, modo, formato, iaAula, contexto, config)
+        const estudo = await buildStudy(
+          conteudo,
+          modo,
+          formato,
+          iaAula,
+          contexto,
+          config,
+          (ms) => setStatus(`Groq está ocupado, tentando de novo em ${Math.ceil(ms / 1000)}s…`),
+          controller.signal,
+        )
+        if (!vivo) return
+        // respiro entre aula e prova: reduz a chance das duas caírem no mesmo instante
+        // de pico do balde de tokens/minuto do Groq (as duas competem pela mesma cota).
+        await dormir(1500)
         if (!vivo) return
         // Estágio 2: a prova é montada à parte e acoplada ao estudo.
         setStatus('Preparando a prova…')
@@ -309,6 +330,7 @@ function Analisando({
         }
         if (vivo) setFimEstrutura(true)
       } catch (e) {
+        if (controller.signal.aborted) return // cancelado de propósito, não é falha
         console.error('Falha ao montar o estudo:', e)
         if (vivo) {
           aoFalhar(e instanceof Error ? e.message : 'Algo deu errado ao ler o material.')
@@ -319,6 +341,7 @@ function Analisando({
 
     return () => {
       vivo = false
+      controller.abort()
     }
   }, [arquivos, modo, formato, contexto, config, personalidade, aoFalhar])
 

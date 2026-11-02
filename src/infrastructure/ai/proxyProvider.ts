@@ -13,13 +13,28 @@
 */
 import type { AIProvider, GenerateOptions, PromptInput, ChatMeta } from '../../application/ports/AIProvider'
 import { paraMensagens } from '../../application/ports/AIProvider'
-import { IALimiteError, ehStatusDeLimite } from '../../application/ports/aiErrors'
+import { IALimiteError, IASemChaveError, ehStatusDeLimite } from '../../application/ports/aiErrors'
 import { deviceAnon } from './deviceAnon'
+import { CHAVE_STORAGE } from '../../domain/settings'
+
+// BYOK: lê a chave direto do localStorage (mesmo padrão de deviceAnon.ts, sem acoplar
+// a React) — o proxyProvider roda fora de componente, não pode usar useSettings().
+function lerChave(campo: 'groqApiKey' | 'geminiApiKey'): string {
+  try {
+    const bruto = localStorage.getItem(CHAVE_STORAGE)
+    if (!bruto) return ''
+    return (JSON.parse(bruto) as Record<string, string>)[campo]?.trim() || ''
+  } catch {
+    return ''
+  }
+}
 
 export const proxyProvider: AIProvider = {
   // Só tarefas de 1 tiro (buildStudy/buildExam/correção) chamam generate() hoje —
   // sempre com string. Mantém a rota /api/generate como está (prompt solto).
   async generate(prompt: PromptInput, opcoes?: GenerateOptions): Promise<string> {
+    const groqApiKey = lerChave('groqApiKey')
+    if (!groqApiKey) throw new IASemChaveError('Configure sua chave Groq em Configurações pra montar o estudo/trabalho.')
     const textoPrompt = typeof prompt === 'string' ? prompt : prompt.map((m) => m.content).join('\n\n')
     const r = await fetch('/api/generate', {
       method: 'POST',
@@ -30,7 +45,9 @@ export const proxyProvider: AIProvider = {
         reasoningEffort: opcoes?.reasoningEffort,
         maxCompletionTokens: opcoes?.maxCompletionTokens,
         device: deviceAnon(),
+        groqApiKey,
       }),
+      signal: opcoes?.signal,
     })
     const d = await r.json().catch(() => ({}) as { text?: string; error?: string })
     if (!r.ok) {
@@ -45,6 +62,8 @@ export const proxyProvider: AIProvider = {
   // por isso aqui a gente FILTRA qualquer `role: "system"` antes de mandar — mesmo que
   // algum caller monte um por engano, ele nunca sai daqui pro proxy.
   async *generateStream(prompt: PromptInput, meta?: ChatMeta): AsyncIterable<string> {
+    const geminiApiKey = lerChave('geminiApiKey')
+    if (!geminiApiKey) throw new IASemChaveError('Configure sua chave Gemini em Configurações pra usar o chat.')
     const mensagens = paraMensagens(prompt).filter((m) => m.role !== 'system')
     const r = await fetch('/api/stream', {
       method: 'POST',
@@ -56,6 +75,7 @@ export const proxyProvider: AIProvider = {
         perfil: meta?.perfil,
         contextoEstudo: meta?.contextoEstudo,
         device: deviceAnon(),
+        geminiApiKey,
       }),
     })
     if (!r.ok || !r.body) {
