@@ -15,6 +15,7 @@ import type { StudySalvo } from '../../domain/study'
 import { useStudies } from '../studies'
 import { tendenciaRecente, blocoMaisFraco, frequenciaEstudo } from '../../application/metricasSessoes'
 import Sidebar from './Sidebar'
+import BotaoChaves from '../components/BotaoChaves'
 
 function agruparPorMateria(estudos: StudySalvo[]): [string, StudySalvo[]][] {
   const grupos = new Map<string, StudySalvo[]>()
@@ -46,6 +47,7 @@ function SessoesEstudo() {
               ‹
             </button>
             <span className="text-lg font-semibold">Sessões de Estudos</span>
+            <BotaoChaves />
           </div>
         </header>
 

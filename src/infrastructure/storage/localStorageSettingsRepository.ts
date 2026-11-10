@@ -13,7 +13,13 @@ export const localStorageSettingsRepository: SettingsRepository = {
       const bruto = localStorage.getItem(CHAVE_STORAGE)
       if (!bruto) return CONFIG_PADRAO
       // mescla com o padrão: se faltar um campo novo no salvo, não fica undefined
-      return { ...CONFIG_PADRAO, ...(JSON.parse(bruto) as Partial<Config>) }
+      // (inclusive dentro de chavesValidas, que é um objeto)
+      const salvo = JSON.parse(bruto) as Partial<Config>
+      return {
+        ...CONFIG_PADRAO,
+        ...salvo,
+        chavesValidas: { ...CONFIG_PADRAO.chavesValidas, ...(salvo.chavesValidas ?? {}) },
+      }
     } catch {
       return CONFIG_PADRAO
     }

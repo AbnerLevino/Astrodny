@@ -38,6 +38,7 @@ import { retryProvider } from '../../infrastructure/ai/retryProvider'
 import { pdfExtractor, contarPaginasPdf } from '../../infrastructure/documents/pdfExtractor'
 import { useStudies } from '../studies'
 import { useSettings } from '../settings'
+import BotaoChaves from '../components/BotaoChaves'
 import { useAuth } from '../auth'
 import Sidebar from './Sidebar'
 import { AbasFluxo } from '../abas'
@@ -641,6 +642,7 @@ function Preparar({
             ‹
           </button>
           <span className="text-lg font-semibold">Novo estudo</span>
+          <BotaoChaves />
         </div>
       </header>
 

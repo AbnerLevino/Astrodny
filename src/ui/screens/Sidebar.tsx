@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useChats } from '../chats'
 import type { Chat } from '../../domain/chat'
 import { useAuth, type Usuario } from '../auth'
+import { IconeChave } from '../components/BotaoChaves'
 import PerfilModal from './PerfilModal'
 import FotoPerfil from '../components/FotoPerfil'
 
@@ -197,6 +198,10 @@ function Sidebar({
           irParaConfig={() => {
             setModalAberto(false)
             irPara('/config')
+          }}
+          irParaChaves={() => {
+            setModalAberto(false)
+            irPara('/config?abrir=chaves')
           }}
           aoAbrirPerfil={() => {
             setModalAberto(false)
@@ -617,6 +622,7 @@ export function ModalPerfil({
   aoSair,
   aoFechar,
   irParaConfig,
+  irParaChaves,
   aoAbrirPerfil,
 }: {
   plano: 'free' | 'pro'
@@ -625,6 +631,8 @@ export function ModalPerfil({
   aoSair: () => Promise<void>
   aoFechar: () => void
   irParaConfig: () => void
+  // abre Configurações já no acordeão de chaves (BYOK) — ver Settings.tsx (?abrir=chaves)
+  irParaChaves: () => void
   aoAbrirPerfil: () => void
 }) {
   // Esc fecha (acessibilidade no desktop)
@@ -669,6 +677,7 @@ export function ModalPerfil({
             por ora só fecham o modal. */}
         <nav className="flex flex-col">
           {usuario && <ItemModal icone={<IconePerfil />} label="Perfil" onClick={aoAbrirPerfil} />}
+          <ItemModal icone={<IconeChave />} label="Chaves de IA" onClick={irParaChaves} />
           <ItemModal icone={<IconePersonalizacao />} label="Personalização" onClick={aoFechar} />
           <ItemModal icone={<IconePlanos />} label="Planos" onClick={aoFechar} />
           <ItemModal icone={<IconeSliders />} label="Configurações" onClick={irParaConfig} />

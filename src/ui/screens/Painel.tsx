@@ -17,6 +17,7 @@ import { useNavigate } from 'react-router-dom'
 import Sidebar, { ModalPerfil } from './Sidebar'
 import PerfilModal from './PerfilModal'
 import FotoPerfil from '../components/FotoPerfil'
+import BotaoChaves from '../components/BotaoChaves'
 import { useChats } from '../chats'
 import { useAuth } from '../auth'
 import { useStudies } from '../studies'
@@ -163,6 +164,8 @@ function Painel() {
         {/* cartão de perfil — só a foto, sem fundo/cartão preto. Logado: abre o
             modal da conta. Sem login: não aparece aqui (vira o CTA "Descubra
             o Astro!" lá embaixo, depois do atalho de Provas). */}
+        {/* canto superior ESQUERDO: botão de chave (some quando as chaves estão válidas) */}
+        <BotaoChaves className="absolute left-5 top-[max(1rem,env(safe-area-inset-top))] z-20" />
         {usuario && (
           <button
             type="button"
@@ -274,6 +277,10 @@ function Painel() {
           irParaConfig={() => {
             setModalAberto(false)
             navigate('/config')
+          }}
+          irParaChaves={() => {
+            setModalAberto(false)
+            navigate('/config?abrir=chaves')
           }}
           aoAbrirPerfil={() => {
             setModalAberto(false)

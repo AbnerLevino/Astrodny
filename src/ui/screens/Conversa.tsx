@@ -11,6 +11,7 @@ import { useEffect, useRef, useState, type DragEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import FotoPerfil from '../components/FotoPerfil'
+import BotaoChaves from '../components/BotaoChaves'
 import { TextoIA, BotaoCopiar } from '../components/ChatTexto'
 import { AbasFluxo } from '../abas'
 import { useAuth } from '../auth'
@@ -205,9 +206,12 @@ function Conversa() {
           {/* ===== ZONA 1: topo (avatar + logo) — SOBREPOSTO; as mensagens rolam por trás ===== */}
           <header className="absolute top-0 inset-x-0 z-20 flex items-center justify-between px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-2">
             {/* no desktop a sidebar já está sempre visível, então o atalho "foto abre menu" some */}
-            <button type="button" aria-label="Abrir menu" onClick={() => setMenuAberto(true)} className="shrink-0 lg:hidden">
-              <FotoPerfil foto={usuario?.foto} className="h-12 w-12 rounded-full border-2 border-white" />
-            </button>
+            <div className="flex items-center gap-3">
+              <button type="button" aria-label="Abrir menu" onClick={() => setMenuAberto(true)} className="shrink-0 lg:hidden">
+                <FotoPerfil foto={usuario?.foto} className="h-12 w-12 rounded-full border-2 border-white" />
+              </button>
+              <BotaoChaves />
+            </div>
             <img src="/logo.png" alt="Astrodny" className="h-9 w-auto" />
           </header>
 

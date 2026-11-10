@@ -9,6 +9,7 @@
 */
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import BotaoChaves from '../components/BotaoChaves'
 import type { TipoTrabalho, Metadados, Trabalho as TrabalhoDomain } from '../../domain/trabalho'
 import { ESTRUTURA_POR_TIPO, numerarSecoes } from '../../domain/trabalho'
 import { buildTrabalho, type EstruturaTrabalho } from '../../application/buildTrabalho'
@@ -118,6 +119,7 @@ function Trabalho() {
               ‹
             </button>
             <span className="shrink-0 text-lg font-semibold">Trabalhos</span>
+            <BotaoChaves />
             <div className="ml-auto min-w-0">
               <AbasFluxo />
             </div>
