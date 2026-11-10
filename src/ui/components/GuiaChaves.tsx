@@ -91,12 +91,16 @@ export default function GuiaChaves() {
       <div className="animar-subida relative z-10 flex w-full flex-col bg-[#141416] text-white lg:h-[640px] lg:max-h-[90vh] lg:w-[900px] lg:flex-row lg:overflow-hidden lg:rounded-3xl lg:border lg:border-white/10 lg:shadow-2xl lg:shadow-black/50">
         {/* ===== conteúdo (esquerda) ===== */}
         <div className="flex min-h-0 flex-1 flex-col">
-          <header className="flex items-center justify-between gap-3 px-5 pb-3 pt-[max(1rem,env(safe-area-inset-top))] lg:px-8 lg:pt-7">
-            <div className="min-w-0">
-              <p className="text-xs font-medium uppercase tracking-wide text-white/40 lg:hidden">
-                Etapa {indice + 1} de {ETAPAS.length}
-              </p>
-              <h2 className="truncate text-lg font-semibold lg:text-xl">{etapa.titulo}</h2>
+          <header className="flex items-center justify-between gap-3 px-5 pb-3 pt-[max(1rem,env(safe-area-inset-top))] lg:px-8 lg:pb-4 lg:pt-7">
+            <div className="flex min-w-0 items-center gap-3">
+              {/* marca do Astrodny (o "A", em fundo transparente) — no desktop ela vai na coluna de etapas */}
+              <img src="/logo-a.png" alt="" aria-hidden="true" className="h-8 w-8 shrink-0 invert lg:hidden" />
+              <div className="min-w-0">
+                <p className="text-xs font-medium uppercase tracking-wide text-white/40 lg:hidden">
+                  Etapa {indice + 1} de {ETAPAS.length}
+                </p>
+                <h2 className="truncate text-lg font-semibold text-white lg:text-xl">{etapa.titulo}</h2>
+              </div>
             </div>
             <button type="button" onClick={fechar} aria-label="Fechar" className="shrink-0 rounded-full p-2 text-white/70 hover:bg-white/10">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -106,10 +110,10 @@ export default function GuiaChaves() {
           </header>
 
           <main className="sem-scrollbar min-h-0 flex-1 overflow-y-auto px-5 pb-4 lg:px-8">
-            <Conteudo id={etapa.id} motivo={motivo} />
+            <Conteudo id={etapa.id} motivo={motivo} irParaEtapa={(id) => setIndice(ETAPAS.findIndex((e) => e.id === id))} />
           </main>
 
-          <footer className="flex items-center justify-between gap-3 border-t border-white/10 px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 lg:px-8 lg:pb-6">
+          <footer className="flex items-center justify-between gap-3 border-t border-white/[0.08] px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 lg:px-8 lg:pb-7">
             <button
               type="button"
               onClick={() => setIndice((i) => Math.max(0, i - 1))}
@@ -140,31 +144,42 @@ export default function GuiaChaves() {
         </div>
 
         {/* ===== etapas (direita, só desktop) ===== */}
-        <nav aria-label="Etapas do guia" className="hidden w-[260px] shrink-0 flex-col gap-1 border-l border-white/10 bg-white/[0.03] p-5 pt-7 lg:flex">
-          <p className="px-3 pb-2 text-xs font-medium uppercase tracking-wide text-white/40">Etapas</p>
+        <nav aria-label="Etapas do guia" className="hidden w-[240px] shrink-0 flex-col gap-0.5 border-l border-white/[0.08] p-5 pt-7 lg:flex">
+          <div className="mb-5 flex items-center gap-3 px-3">
+            {/* logo-a.png é a marca "A" preta em fundo transparente — `invert` deixa branca no cartão escuro */}
+            <img src="/logo-a.png" alt="" aria-hidden="true" className="h-8 w-8 shrink-0 invert" />
+            <div className="leading-tight">
+              <p className="text-[15px] font-semibold text-white">Astrodny</p>
+              <p className="text-xs text-white/45">Guia de chaves</p>
+            </div>
+          </div>
+          <p className="px-3 pb-3 text-[11px] font-medium uppercase tracking-wider text-white/35">Etapas</p>
           {ETAPAS.map((e, i) => {
             const ativa = i === indice
             const feita = e.provedor ? chavesValidas[e.provedor] : i < indice
-            const falta = e.provedor ? !chavesValidas[e.provedor] : false
             return (
               <button
                 key={e.id}
                 type="button"
                 onClick={() => setIndice(i)}
                 aria-current={ativa ? 'step' : undefined}
-                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition-colors ${
-                  ativa ? 'bg-white/10 text-white' : 'text-white/70 hover:bg-white/5'
+                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                  ativa ? 'text-white' : 'text-white/55 hover:text-white/80'
                 }`}
               >
+                {/* marcador: check discreto se feita; círculo vazado fino; só a etapa atual acende */}
                 <span
-                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold ${
-                    feita ? 'border-emerald-400/60 bg-emerald-400/15 text-emerald-300' : ativa ? 'border-white text-white' : 'border-white/30 text-white/50'
+                  className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border text-[10px] ${
+                    feita
+                      ? 'border-emerald-400/50 text-emerald-300'
+                      : ativa
+                        ? 'border-white bg-white text-black font-semibold'
+                        : 'border-white/25 text-white/40'
                   }`}
                 >
                   {feita ? '✓' : i + 1}
                 </span>
-                <span className="min-w-0 flex-1 truncate">{e.tituloCurto}</span>
-                {falta && <span className="h-2 w-2 shrink-0 rounded-full bg-amber-400" aria-label="falta configurar" />}
+                <span className={`min-w-0 flex-1 truncate ${ativa ? 'font-medium' : ''}`}>{e.tituloCurto}</span>
               </button>
             )
           })}
@@ -177,32 +192,39 @@ export default function GuiaChaves() {
 
 /* ===================== TEXTOS DAS ETAPAS ===================== */
 
-function Conteudo({ id, motivo }: { id: Etapa['id']; motivo: MotivoGuia }) {
+function Conteudo({ id, motivo, irParaEtapa }: { id: Etapa['id']; motivo: MotivoGuia; irParaEtapa: (id: Etapa['id']) => void }) {
   switch (id) {
     case 'como-funciona':
       return <EtapaComoFunciona />
     case 'por-que':
       return <EtapaPorQue />
     case 'groq':
-      return <EtapaProvedor provedor="groq" />
+      return <EtapaProvedor provedor="groq" irParaEtapa={irParaEtapa} />
     case 'gemini':
-      return <EtapaProvedor provedor="gemini" />
+      return <EtapaProvedor provedor="gemini" irParaEtapa={irParaEtapa} />
     case 'pronto':
       return <EtapaPronto motivo={motivo} />
   }
 }
 
+// Tipografia do guia: texto corrido em cinza claro nítido com respiro (leading 1.6);
+// títulos de item em branco puro, peso 600.
 function P({ children }: { children: ReactNode }) {
-  return <p className="pb-3 text-[15px] leading-relaxed text-white/80">{children}</p>
+  return <p className="pb-4 text-[15px] leading-[1.6] text-white/70">{children}</p>
 }
 
-function Cartao({ titulo, children }: { titulo: string; children: ReactNode }) {
+// Item "editorial": sem caixa — só uma linha divisória fina entre um e outro.
+function Item({ titulo, children }: { titulo: string; children: ReactNode }) {
   return (
-    <div className="mb-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-      <p className="pb-1 font-medium">{titulo}</p>
-      <p className="text-sm leading-relaxed text-white/60">{children}</p>
+    <div className="border-b border-white/10 py-3.5 last:border-b-0">
+      <p className="pb-1 text-[15px] font-semibold text-white">{titulo}</p>
+      <p className="text-sm leading-[1.6] text-white/70">{children}</p>
     </div>
   )
+}
+
+function Lista({ children }: { children: ReactNode }) {
+  return <div className="mb-4 border-t border-white/10">{children}</div>
 }
 
 function EtapaComoFunciona() {
@@ -213,21 +235,23 @@ function EtapaComoFunciona() {
         é simples: você traz o conteúdo da aula, e ele transforma isso em um estudo guiado, em porções
         pequenas, com verificação de verdade.
       </P>
-      <Cartao titulo="1. Você anexa o material">
-        Os slides ou o PDF que o professor mandou. O Astrodny lê o texto e entende os tópicos.
-      </Cartao>
-      <Cartao titulo="2. Ele monta a aula em blocos">
-        Em vez de "leia 40 páginas", cada tópico vira um bloco curto: explica, dá exemplo e faz uma
-        pergunta pra conferir se você entendeu antes de seguir.
-      </Cartao>
-      <Cartao titulo="3. Prova e desempenho por tópico">
-        No fim, uma prova sobre o que foi estudado. O resultado mostra o que ficou firme e o que precisa
-        revisar — por tópico, não só uma nota.
-      </Cartao>
-      <Cartao titulo="Chat e Trabalhos">
-        O chat tira dúvidas a qualquer momento, lembrando do seu curso e das suas matérias. Em
-        Trabalhos, você cola o texto e ele organiza e formata nas normas da ABNT.
-      </Cartao>
+      <Lista>
+        <Item titulo="1. Você anexa o material">
+          Os slides ou o PDF que o professor mandou. O Astrodny lê o texto e entende os tópicos.
+        </Item>
+        <Item titulo="2. Ele monta a aula em blocos">
+          Em vez de "leia 40 páginas", cada tópico vira um bloco curto: explica, dá exemplo e faz uma
+          pergunta pra conferir se você entendeu antes de seguir.
+        </Item>
+        <Item titulo="3. Prova e desempenho por tópico">
+          No fim, uma prova sobre o que foi estudado. O resultado mostra o que ficou firme e o que precisa
+          revisar — por tópico, não só uma nota.
+        </Item>
+        <Item titulo="Chat e Trabalhos">
+          O chat tira dúvidas a qualquer momento, lembrando do seu curso e das suas matérias. Em
+          Trabalhos, você cola o texto e ele organiza e formata nas normas da ABNT.
+        </Item>
+      </Lista>
       <P>
         Tudo isso usa inteligência artificial. E é aí que entra a parte das chaves, na próxima etapa.
       </P>
@@ -239,9 +263,9 @@ function EtapaPorQue() {
   return (
     <div className="pt-1">
       <P>
-        Pra gerar aulas, provas e respostas, o Astrodny usa modelos de IA de duas empresas: o{' '}
+        Pra gerar aulas, provas e respostas, o Astrodny usa dois serviços de IA: o{' '}
         <strong className="text-white">Groq</strong> (Estudar e Trabalhos) e o{' '}
-        <strong className="text-white">Gemini</strong>, do Google (chat). Pra usar esses modelos, é
+        <strong className="text-white">Gemini</strong>, do Google (chat). Pra usar esses serviços, é
         preciso uma <strong className="text-white">chave de acesso</strong>: um código, parecido com uma
         senha, que identifica quem está usando.
       </P>
@@ -249,18 +273,20 @@ function EtapaPorQue() {
         No Astrodny, <strong className="text-white">cada pessoa usa a própria chave</strong>. Você cria a
         sua, de graça, em menos de 2 minutos, e cola aqui. Por quê?
       </P>
-      <Cartao titulo="É grátis">
-        As duas empresas oferecem um plano gratuito que dá e sobra pra estudar: dezenas de aulas e
-        centenas de mensagens por dia. Sem cartão de crédito.
-      </Cartao>
-      <Cartao titulo="O limite é só seu">
-        Se o Astrodny usasse uma chave única pra todo mundo, bastaria algumas pessoas estudando ao
-        mesmo tempo pra travar pra todas. Com a sua chave, o seu limite é só seu.
-      </Cartao>
-      <Cartao titulo="Fica no seu navegador">
-        A chave é guardada só neste aparelho. Ela é enviada pro nosso servidor apenas pra repassar
-        o seu pedido ao Groq ou ao Gemini, e nunca é gravada nem compartilhada.
-      </Cartao>
+      <Lista>
+        <Item titulo="É grátis">
+          Os dois serviços têm um plano gratuito que dá pra estudar todo dia: dezenas de aulas e
+          muitas mensagens de chat, sem cartão de crédito.
+        </Item>
+        <Item titulo="O limite é só seu">
+          Se o Astrodny usasse uma chave única pra todo mundo, bastaria algumas pessoas estudando ao
+          mesmo tempo pra travar pra todas. Com a sua chave, o seu limite é só seu.
+        </Item>
+        <Item titulo="Fica no seu navegador">
+          A chave é guardada só neste aparelho. Ela é enviada pro nosso servidor apenas pra repassar
+          o seu pedido ao Groq ou ao Gemini, e nunca é gravada nem compartilhada.
+        </Item>
+      </Lista>
       <P>
         Nas próximas duas etapas você cria cada uma. Se quiser usar só o chat, ou só o Estudar, pode
         fazer só a chave correspondente e deixar a outra pra depois.
@@ -269,7 +295,7 @@ function EtapaPorQue() {
   )
 }
 
-function EtapaProvedor({ provedor }: { provedor: Provedor }) {
+function EtapaProvedor({ provedor, irParaEtapa }: { provedor: Provedor; irParaEtapa: (id: Etapa['id']) => void }) {
   const info = INFO_PROVEDOR[provedor]
   const passos: ReactNode[] =
     provedor === 'groq'
@@ -291,21 +317,22 @@ function EtapaProvedor({ provedor }: { provedor: Provedor }) {
       <P>
         {provedor === 'groq'
           ? 'O Groq é quem gera as aulas, as provas e a estrutura dos trabalhos. Sem esta chave, o Estudar e o Trabalhos não funcionam.'
-          : 'O Gemini é quem responde no chat e no tira-dúvidas durante o estudo. Sem esta chave, o chat não funciona.'}
+          : 'O Gemini é quem responde no chat e no tira-dúvidas durante o estudo. Sem esta chave, o chat não funciona.'}{' '}
+        <button type="button" onClick={() => irParaEtapa('por-que')} className="text-white/55 underline decoration-white/30 underline-offset-2 hover:text-white">
+          Por que preciso da minha própria chave?
+        </button>
       </P>
-      <ol className="mb-4 flex flex-col gap-2">
+      <ol className="mb-5 border-t border-white/10">
         {passos.map((passo, i) => (
-          <li key={i} className="flex gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm leading-relaxed text-white/80">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/10 text-[12px] font-semibold text-white">
+          <li key={i} className="flex gap-3 border-b border-white/10 py-3.5 text-sm leading-[1.6] text-white/70">
+            <span className="mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-white/25 text-[11px] text-white/70">
               {i + 1}
             </span>
             <span>{passo}</span>
           </li>
         ))}
       </ol>
-      <div className="rounded-2xl border border-white/15 bg-black/20 p-4">
-        <ChaveProvedor provedor={provedor} comRotulo />
-      </div>
+      <ChaveProvedor provedor={provedor} comRotulo />
       <p className="pt-3 text-xs text-white/40">
         Sua chave fica só no seu navegador e nunca é gravada nos nossos servidores.
       </p>
@@ -320,8 +347,10 @@ function EtapaPronto({ motivo }: { motivo: MotivoGuia }) {
 
   return (
     <div className="pt-1">
-      <Linha ok={chavesValidas.groq} titulo="Groq — Estudar e Trabalhos" />
-      <Linha ok={chavesValidas.gemini} titulo="Gemini — Chat" />
+      <div className="mb-4 border-t border-white/10">
+        <Linha ok={chavesValidas.groq} titulo="Groq — Estudar e Trabalhos" />
+        <Linha ok={chavesValidas.gemini} titulo="Gemini — Chat" />
+      </div>
       {faltaObrigatoria ? (
         <P>
           Pra {motivo === 'chat' ? 'enviar sua mensagem' : motivo === 'estudar' ? 'montar seu estudo' : 'organizar seu trabalho'},
@@ -332,10 +361,15 @@ function EtapaPronto({ motivo }: { motivo: MotivoGuia }) {
           As duas chaves foram aceitas. O botão de chave do topo some a partir de agora; se um dia precisar
           trocar uma chave, é no cartão de perfil, em "Chaves de IA", ou em Configurações.
         </P>
+      ) : chavesValidas.groq || chavesValidas.gemini ? (
+        <P>
+          Uma das chaves já está pronta. A outra pode ficar pra depois: o botão de chave continua no topo
+          das telas até as duas estarem configuradas.
+        </P>
       ) : (
         <P>
-          A chave que você precisa agora já está pronta. A outra pode ficar pra depois: o botão de chave
-          continua no topo das telas até as duas estarem configuradas.
+          Nenhuma chave configurada ainda. Você pode fechar e explorar o app à vontade; na hora de usar o
+          chat ou o Estudar, este guia volta na etapa certa. O botão de chave do topo também abre ele.
         </P>
       )}
     </div>
@@ -344,17 +378,17 @@ function EtapaPronto({ motivo }: { motivo: MotivoGuia }) {
 
 function Linha({ ok, titulo }: { ok: boolean; titulo: string }) {
   return (
-    <div className="mb-3 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+    <div className="flex items-center gap-3 border-b border-white/10 py-3.5">
       <span
-        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
-          ok ? 'bg-emerald-400/15 text-emerald-300' : 'bg-amber-400/15 text-amber-200'
+        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs ${
+          ok ? 'border-emerald-400/50 text-emerald-300' : 'border-amber-400/50 text-amber-200'
         }`}
       >
         {ok ? '✓' : '!'}
       </span>
       <div className="min-w-0">
-        <p className="font-medium">{titulo}</p>
-        <p className="text-xs text-white/50">{ok ? 'Chave válida' : 'Falta configurar'}</p>
+        <p className="text-[15px] font-semibold text-white">{titulo}</p>
+        <p className="text-xs text-white/55">{ok ? 'Chave válida' : 'Falta configurar'}</p>
       </div>
     </div>
   )

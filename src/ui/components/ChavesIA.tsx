@@ -9,9 +9,9 @@
   Também confere ao montar uma chave que já estava salva mas nunca foi verificada
   (quem salvou antes desta verificação existir).
 */
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useSettings } from '../settings'
-import { validarChave, type Provedor, type ResultadoValidacao } from '../../infrastructure/ai/validarChave'
+import type { Provedor } from '../../infrastructure/ai/validarChave'
 
 export type EstadoChave = 'vazia' | 'verificando' | 'valida' | 'invalida' | 'erro' | 'nao-verificada'
 
@@ -45,17 +45,16 @@ export function LinkExterno({ href, children }: { href: string; children: ReactN
   )
 }
 
-// Estado e ações de UMA chave: valor salvo, resultado da verificação e o que fazer
-// ao salvar. É o que OpcaoChave (acordeão) e ChaveProvedor (guia) compartilham.
+// Estado e ações de UMA chave, lidos do contexto (o estado de verificação vive lá, pra
+// que o selo do acordeão e o campo contem a mesma história). Compartilhado por
+// OpcaoChave (acordeão) e ChaveProvedor (guia).
 export function useChaveProvedor(provedor: Provedor) {
-  const { groqApiKey, geminiApiKey, definirGroqApiKey, definirGeminiApiKey, chavesValidas, marcarChaveValida } =
+  const { groqApiKey, geminiApiKey, definirGroqApiKey, definirGeminiApiKey, chavesValidas, verificacao, verificarChave } =
     useSettings()
   const valor = provedor === 'groq' ? groqApiKey : geminiApiKey
   const definir = provedor === 'groq' ? definirGroqApiKey : definirGeminiApiKey
   const valida = chavesValidas[provedor]
-
-  const [verificando, setVerificando] = useState(false)
-  const [ultimo, setUltimo] = useState<ResultadoValidacao | null>(null)
+  const { verificando, ultimo } = verificacao[provedor]
 
   const estado: EstadoChave = !valor
     ? 'vazia'
@@ -69,31 +68,19 @@ export function useChaveProvedor(provedor: Provedor) {
             ? 'erro'
             : 'nao-verificada'
 
-  async function verificar(chave: string) {
-    if (!chave) return
-    setVerificando(true)
-    const resultado = await validarChave(provedor, chave)
-    setVerificando(false)
-    setUltimo(resultado)
-    if (resultado !== 'erro') marcarChaveValida(provedor, resultado === 'valida')
-  }
-
-  // chave salva antes de existir verificação: confere uma vez ao montar
-  const montouRef = useRef(false)
+  // chave salva antes de existir verificação (ou nunca conferida nesta sessão): confere ao montar
   useEffect(() => {
-    if (montouRef.current) return
-    montouRef.current = true
-    if (valor && !valida) void verificar(valor)
+    if (valor && !valida && ultimo === null) void verificarChave(provedor)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   function aoSalvar(chave: string) {
     const limpa = chave.trim()
     definir(limpa)
-    if (limpa && (limpa !== valor || (!valida && !verificando))) void verificar(limpa)
+    if (limpa && (limpa !== valor || !valida)) void verificarChave(provedor, limpa)
   }
 
-  return { valor, estado, aoSalvar, tentarDeNovo: () => void verificar(valor) }
+  return { valor, estado, aoSalvar, tentarDeNovo: () => void verificarChave(provedor) }
 }
 
 export function AcordeaoChaves({ inicial = null }: { inicial?: Provedor | null }) {
