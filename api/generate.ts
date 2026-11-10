@@ -14,7 +14,7 @@ import { registrarEvento, type TipoEvento } from './_lib/log'
 import { dentroDoLimite } from './_lib/rateLimit'
 import { MAX_PROMPT_CHARS } from './_lib/limites'
 import { headersCors } from './_lib/cors'
-import { ehLimite } from '../src/application/ports/aiErrors'
+import { ehLimite, ehChaveInvalida } from '../src/application/ports/aiErrors'
 
 export const config = { runtime: 'edge' }
 
@@ -84,6 +84,11 @@ export default async function handler(request: Request): Promise<Response> {
     // sobrecarga (429/503 na cadeia) → responde 429, pra o cliente mostrar a mensagem amigável
     if (ehLimite(e)) {
       return json({ error: 'A IA está sobrecarregada no momento. Tente de novo em instantes.' }, 429, cors)
+    }
+    // chave da pessoa recusada pelo provedor → 401 (o cliente converte em erro não-transitório
+    // e manda pra Configurações, sem re-tentar)
+    if (ehChaveInvalida(e)) {
+      return json({ error: e.message }, 401, cors)
     }
     return json({ error: e instanceof Error ? e.message : 'Falha na geração.' }, 502, cors)
   }

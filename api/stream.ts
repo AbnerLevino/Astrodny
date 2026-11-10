@@ -14,7 +14,7 @@ import { dentroDoLimite } from './_lib/rateLimit'
 import { MAX_MESSAGES_CHARS, somaCaracteres } from './_lib/limites'
 import { montarSystemPrompt } from './_lib/systemPrompt'
 import { headersCors } from './_lib/cors'
-import { ehLimite } from '../src/application/ports/aiErrors'
+import { ehLimite, ehChaveInvalida } from '../src/application/ports/aiErrors'
 import type { ChatMessage } from '../src/application/ports/AIProvider'
 import type { Personalidade } from '../src/domain/settings'
 import type { Perfil } from '../src/domain/perfil'
@@ -106,9 +106,10 @@ export default async function handler(request: Request): Promise<Response> {
         }
       } catch (e) {
         // se falhar ANTES de qualquer texto, sinaliza o erro no próprio fluxo (o cliente
-        // detecta o prefixo e converte no erro certo). "[erro:limite]" = sobrecarga (429/503).
+        // detecta o prefixo e converte no erro certo). "[erro:limite]" = sobrecarga (429/503);
+        // "[erro:chave]" = o Gemini recusou a chave da pessoa (401/403).
         if (completo === '') {
-          const prefixo = ehLimite(e) ? '[erro:limite] ' : '[erro] '
+          const prefixo = ehLimite(e) ? '[erro:limite] ' : ehChaveInvalida(e) ? '[erro:chave] ' : '[erro] '
           controller.enqueue(encoder.encode(prefixo + (e instanceof Error ? e.message : 'falha no stream')))
         }
       } finally {

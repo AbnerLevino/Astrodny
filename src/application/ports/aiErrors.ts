@@ -57,3 +57,24 @@ export class IASemChaveError extends Error {
 export function ehSemChave(erro: unknown): erro is IASemChaveError {
   return erro instanceof IASemChaveError
 }
+
+// BYOK: a chave EXISTE mas o provedor a RECUSOU (401/403 — inválida, revogada, colada
+// errada). Herda de IASemChaveError de propósito: pra retry/UI é o MESMO caso ("problema
+// com a chave do usuário, não adianta re-tentar, mande pra Configurações"), só muda o
+// texto. Quem precisar distinguir os dois usa ehChaveInvalida().
+export class IAChaveInvalidaError extends IASemChaveError {
+  constructor(mensagem: string) {
+    super(mensagem)
+    this.name = 'IAChaveInvalidaError'
+  }
+}
+
+export function ehChaveInvalida(erro: unknown): erro is IAChaveInvalidaError {
+  return erro instanceof IAChaveInvalidaError
+}
+
+// 401 = chave inválida/ausente; 403 = chave sem permissão (revogada, projeto bloqueado).
+// Nos dois casos re-tentar não adianta — é a chave da pessoa que está errada.
+export function ehStatusDeChaveInvalida(status: number): boolean {
+  return status === 401 || status === 403
+}

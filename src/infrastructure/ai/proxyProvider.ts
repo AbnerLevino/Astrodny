@@ -13,7 +13,12 @@
 */
 import type { AIProvider, GenerateOptions, PromptInput, ChatMeta } from '../../application/ports/AIProvider'
 import { paraMensagens } from '../../application/ports/AIProvider'
-import { IALimiteError, IASemChaveError, ehStatusDeLimite } from '../../application/ports/aiErrors'
+import {
+  IALimiteError,
+  IASemChaveError,
+  IAChaveInvalidaError,
+  ehStatusDeLimite,
+} from '../../application/ports/aiErrors'
 import { deviceAnon } from './deviceAnon'
 import { CHAVE_STORAGE } from '../../domain/settings'
 
@@ -52,6 +57,8 @@ export const proxyProvider: AIProvider = {
     const d = await r.json().catch(() => ({}) as { text?: string; error?: string })
     if (!r.ok) {
       if (ehStatusDeLimite(r.status)) throw new IALimiteError(d.error || undefined, r.status)
+      // 401 = o servidor repassou a recusa do Groq à chave da pessoa (não-transitório)
+      if (r.status === 401) throw new IAChaveInvalidaError(d.error ?? 'O Groq recusou sua chave. Confira em Configurações.')
       throw new Error(d.error ?? `O servidor respondeu ${r.status}.`)
     }
     return d.text ?? ''
@@ -84,7 +91,8 @@ export const proxyProvider: AIProvider = {
     }
     // o corpo é texto puro em pedaços — lê conforme chega e repassa (mesmo padrão dos outros providers).
     // O /api/stream responde sempre 200 e, se a cadeia falhar ANTES de escrever, injeta um
-    // sentinel no PRIMEIRO pedaço: "[erro:limite] ..." (sobrecarga) ou "[erro] ..." (falha geral).
+    // sentinel no PRIMEIRO pedaço: "[erro:limite] ..." (sobrecarga), "[erro:chave] ..." (chave
+    // recusada) ou "[erro] ..." (falha geral).
     // A gente detecta isso no 1º pedaço e converte no erro tipado — pra não exibir "[erro]" como texto.
     const decoder = new TextDecoder()
     let primeiro = true
@@ -95,6 +103,11 @@ export const proxyProvider: AIProvider = {
         primeiro = false
         if (texto.startsWith('[erro:limite]')) {
           throw new IALimiteError(texto.replace('[erro:limite]', '').trim() || undefined)
+        }
+        if (texto.startsWith('[erro:chave]')) {
+          throw new IAChaveInvalidaError(
+            texto.replace('[erro:chave]', '').trim() || 'O Gemini recusou sua chave. Confira em Configurações.',
+          )
         }
         if (texto.startsWith('[erro]')) {
           throw new Error(texto.replace('[erro]', '').trim() || 'Falha no stream.')

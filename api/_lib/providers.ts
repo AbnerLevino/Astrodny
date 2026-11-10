@@ -7,7 +7,11 @@
 */
 import type { AIProvider, GenerateOptions, PromptInput } from '../../src/application/ports/AIProvider'
 import { paraMensagens } from '../../src/application/ports/AIProvider'
-import { IALimiteError, ehStatusDeLimite } from '../../src/application/ports/aiErrors'
+import { IALimiteError, IAChaveInvalidaError, ehStatusDeLimite, ehStatusDeChaveInvalida } from '../../src/application/ports/aiErrors'
+
+// Mensagens pra chave recusada — texto amigável que vai direto pra tela. NUNCA inclui a chave.
+const MSG_GROQ_RECUSADA = 'O Groq recusou sua chave (inválida ou revogada). Confira a chave em Configurações.'
+const MSG_GEMINI_RECUSADA = 'O Gemini recusou sua chave (inválida ou revogada). Confira a chave em Configurações.'
 
 // Lê o tempo de espera sugerido pelo provedor (Groq manda 'retry-after', em segundos,
 // e/ou 'x-ratelimit-reset-tokens', tipo "1.2s"/"592ms") e normaliza pra ms — usado pelo
@@ -45,6 +49,7 @@ export function groqProvider(chave: string): AIProvider {
       if (!r.ok) {
         // NUNCA interpolar `chave` na mensagem de erro.
         if (ehStatusDeLimite(r.status)) throw new IALimiteError(undefined, r.status, esperaSugeridaMs(r))
+        if (ehStatusDeChaveInvalida(r.status)) throw new IAChaveInvalidaError(MSG_GROQ_RECUSADA)
         throw new Error(`Groq respondeu ${r.status}`)
       }
       const d = await r.json()
@@ -59,6 +64,7 @@ export function groqProvider(chave: string): AIProvider {
       })
       if (!r.ok || !r.body) {
         if (ehStatusDeLimite(r.status)) throw new IALimiteError(undefined, r.status, esperaSugeridaMs(r))
+        if (ehStatusDeChaveInvalida(r.status)) throw new IAChaveInvalidaError(MSG_GROQ_RECUSADA)
         throw new Error(`Groq respondeu ${r.status}`)
       }
       const decoder = new TextDecoder()
@@ -110,13 +116,16 @@ function geminiCorpo(prompt: PromptInput, json?: boolean) {
 export function geminiProvider(chave: string): AIProvider {
   return {
     async generate(prompt, opcoes?: GenerateOptions) {
-      const r = await fetch(`${GEMINI_BASE}/${GEMINI_MODEL}:generateContent?key=${chave}`, {
+      // chave no header `x-goog-api-key` (não na query string): URL com ?key= acaba em log
+      // de proxy/CDN e em mensagens de erro de fetch; header não.
+      const r = await fetch(`${GEMINI_BASE}/${GEMINI_MODEL}:generateContent`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': chave },
         body: geminiCorpo(prompt, opcoes?.json),
       })
       if (!r.ok) {
         if (ehStatusDeLimite(r.status)) throw new IALimiteError(undefined, r.status, esperaSugeridaMs(r))
+        if (ehStatusDeChaveInvalida(r.status)) throw new IAChaveInvalidaError(MSG_GEMINI_RECUSADA)
         throw new Error(`Gemini respondeu ${r.status}`)
       }
       const d = await r.json()
@@ -124,13 +133,14 @@ export function geminiProvider(chave: string): AIProvider {
     },
 
     async *generateStream(prompt) {
-      const r = await fetch(`${GEMINI_BASE}/${GEMINI_MODEL}:streamGenerateContent?alt=sse&key=${chave}`, {
+      const r = await fetch(`${GEMINI_BASE}/${GEMINI_MODEL}:streamGenerateContent?alt=sse`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': chave },
         body: geminiCorpo(prompt),
       })
       if (!r.ok || !r.body) {
         if (ehStatusDeLimite(r.status)) throw new IALimiteError(undefined, r.status, esperaSugeridaMs(r))
+        if (ehStatusDeChaveInvalida(r.status)) throw new IAChaveInvalidaError(MSG_GEMINI_RECUSADA)
         throw new Error(`Gemini respondeu ${r.status}`)
       }
       const decoder = new TextDecoder()

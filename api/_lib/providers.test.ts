@@ -5,7 +5,7 @@
 */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { groqProvider, geminiProvider } from './providers'
-import { IALimiteError, ehLimite } from '../../src/application/ports/aiErrors'
+import { IALimiteError, ehLimite, ehChaveInvalida, ehSemChave } from '../../src/application/ports/aiErrors'
 
 function respostaErro(status: number, headers: Record<string, string> = {}) {
   return new Response(null, { status, headers })
@@ -29,11 +29,21 @@ describe('groqProvider', () => {
     expect((erro as IALimiteError).esperaMs).toBe(592)
   })
 
-  it('nunca interpola a chave na mensagem de erro (status não-limite)', async () => {
+  it('401 vira IAChaveInvalidaError (não-transitório, também reconhecido por ehSemChave) sem vazar a chave', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => respostaErro(401)))
     const erro: Error = await groqProvider('gsk_segredo_super_secreto').generate('oi').catch((e) => e)
+    expect(ehChaveInvalida(erro)).toBe(true)
+    expect(ehSemChave(erro)).toBe(true)
+    expect(ehLimite(erro)).toBe(false)
     expect(erro.message).not.toContain('gsk_segredo_super_secreto')
-    expect(erro.message).toBe('Groq respondeu 401')
+    expect(erro.message).toContain('Configurações')
+  })
+
+  it('nunca interpola a chave na mensagem de erro (status genérico)', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => respostaErro(500)))
+    const erro: Error = await groqProvider('gsk_segredo_super_secreto').generate('oi').catch((e) => e)
+    expect(erro.message).not.toContain('gsk_segredo_super_secreto')
+    expect(erro.message).toBe('Groq respondeu 500')
   })
 })
 
@@ -45,9 +55,19 @@ describe('geminiProvider', () => {
     expect((erro as IALimiteError).esperaMs).toBe(2000)
   })
 
-  it('nunca interpola a chave na mensagem de erro', async () => {
+  it('403 vira IAChaveInvalidaError sem vazar a chave', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => respostaErro(403)))
     const erro: Error = await geminiProvider('AIza_segredo').generate('oi').catch((e) => e)
+    expect(ehChaveInvalida(erro)).toBe(true)
     expect(erro.message).not.toContain('AIza_segredo')
+  })
+
+  it('manda a chave no header x-goog-api-key, nunca na URL', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ candidates: [] }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await geminiProvider('AIza_segredo').generate('oi')
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).not.toContain('AIza_segredo')
+    expect((init.headers as Record<string, string>)['x-goog-api-key']).toBe('AIza_segredo')
   })
 })
