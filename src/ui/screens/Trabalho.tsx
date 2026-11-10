@@ -7,7 +7,7 @@
   estar do jeito certo. O export (.docx em ABNT) em si é determinístico, sem IA — ver
   application/exportarAbnt.ts.
 */
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import BotaoChaves from '../components/BotaoChaves'
 import type { TipoTrabalho, Metadados, Trabalho as TrabalhoDomain } from '../../domain/trabalho'
@@ -20,6 +20,9 @@ import { retryProvider } from '../../infrastructure/ai/retryProvider'
 import Sidebar from './Sidebar'
 import { AbasFluxo } from '../abas'
 import { useAuth } from '../auth'
+import { useSettings } from '../settings'
+import { useGuiaChaves } from '../guiaChaves'
+import { ehSemChave } from '../../application/ports/aiErrors'
 
 // mesma lógica de wiring do StudySession: em PROD passa pelo proxy (chaves seguras,
 // cadeia Gemini→Groq 120b); em DEV usa Groq direto (free tier). SEM retryProvider no
@@ -39,6 +42,11 @@ function Trabalho() {
   const [tipo, setTipo] = useState<TipoTrabalho>('paper')
   const [texto, setTexto] = useState('')
   const [erro, setErro] = useState<string | null>(null)
+  const { groqApiKey } = useSettings()
+  const guia = useGuiaChaves()
+  // ref com a chave ATUAL (ver chats.tsx): o `organizar` reagendado pelo guia é uma closure antiga
+  const groqApiKeyRef = useRef(groqApiKey)
+  groqApiKeyRef.current = groqApiKey
   const [estrutura, setEstrutura] = useState<EstruturaTrabalho | null>(null)
   const [instrucao, setInstrucao] = useState('')
   const [corrigindo, setCorrigindo] = useState(false)
@@ -47,14 +55,23 @@ function Trabalho() {
   async function organizar() {
     if (!texto.trim()) return
     setErro(null)
+    // sem chave do Groq (BYOK): guia primeiro; ao concluir, organiza sozinho
+    if (!groqApiKeyRef.current.trim()) {
+      guia.abrir({ motivo: 'trabalho', aoConcluir: () => void organizar() })
+      return
+    }
     setEtapa('processando')
     try {
       const resultado = await buildTrabalho(texto, ia)
       setEstrutura(resultado)
       setEtapa('visualizer')
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Falha ao organizar o texto.')
       setEtapa('entrada')
+      if (ehSemChave(e)) {
+        guia.abrir({ motivo: 'trabalho', aoConcluir: () => void organizar() })
+        return
+      }
+      setErro(e instanceof Error ? e.message : 'Falha ao organizar o texto.')
     }
   }
 
@@ -69,7 +86,8 @@ function Trabalho() {
       setEstrutura(resultado)
       setInstrucao('')
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Falha ao aplicar a correção.')
+      if (ehSemChave(e)) guia.abrir({ motivo: 'trabalho', aoConcluir: () => void corrigir() })
+      else setErro(e instanceof Error ? e.message : 'Falha ao aplicar a correção.')
     } finally {
       setCorrigindo(false)
     }

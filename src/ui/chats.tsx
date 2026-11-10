@@ -22,6 +22,7 @@ import { retryProvider } from '../infrastructure/ai/retryProvider'
 import { ehLimite, ehSemChave } from '../application/ports/aiErrors'
 import { localStorageChatRepository } from '../infrastructure/storage/localStorageChatRepository'
 import { useSettings } from './settings'
+import { useGuiaChaves } from './guiaChaves'
 import { useAuth } from './auth'
 
 export type { Mensagem, Chat, Anexo } // reexporta pra quem já importava daqui não quebrar
@@ -78,7 +79,12 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
   const [chats, setChats] = useState<Chat[]>(() => repo.carregar())
   const [chatAtivoId, setChatAtivo] = useState<string | null>(null)
   // personalidade escolhida nas Configurações — define o tom das respostas da IA
-  const { personalidade } = useSettings()
+  const { personalidade, geminiApiKey } = useSettings()
+  const guia = useGuiaChaves()
+  // ref com a chave ATUAL: o reenvio agendado pelo guia (aoConcluir) é uma closure criada
+  // quando a chave ainda estava vazia — sem a ref, ele leria o valor velho e reabriria o guia.
+  const geminiApiKeyRef = useRef(geminiApiKey)
+  geminiApiKeyRef.current = geminiApiKey
   // perfil de quem está logado (Google) — undefined pra quem usa anônimo
   const { perfil } = useAuth()
 
@@ -137,7 +143,22 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
   // Consome o stream do caso de uso e vai anexando os pedaços na tela.
   // O "pensando" (pontinhos) aparece enquanto o primeiro pedaço não chega; assim
   // que ele chega, criamos a mensagem da IA e o texto começa a crescer.
+  // Sem chave do Gemini (BYOK): em vez de errar, abre o guia de chaves na etapa certa
+  // e, quando a pessoa concluir, responde a mensagem que ela tinha mandado. Se ela
+  // fechar sem concluir, a mensagem fica no chat com um aviso curto no lugar da resposta.
+  function abrirGuiaEDepoisResponder(id: string, historico: Mensagem[]) {
+    guia.abrir({
+      motivo: 'chat',
+      aoConcluir: () => void responderIA(id, historico),
+      aoCancelar: () => adicionarMensagemIA(id, 'Pra eu responder, configure sua chave do Gemini — é no botão de chave do topo da tela.'),
+    })
+  }
+
   async function responderIA(id: string, historico: Mensagem[]) {
+    if (!geminiApiKeyRef.current.trim()) {
+      abrirGuiaEDepoisResponder(id, historico)
+      return
+    }
     const controller = new AbortController()
     abortRef.current = controller
     setPensandoId(id)
@@ -167,6 +188,9 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
       // Limite = sobrecarga (temporário); qualquer outro = falha genérica. (Aborto manual não cai aqui.)
       if (controller.signal.aborted) {
         // nada: o aluno mandou parar
+      } else if (ehSemChave(e) && !iaCriada) {
+        // chave ausente/recusada pelo servidor → guia, não erro (mesmo caminho do pré-check)
+        abrirGuiaEDepoisResponder(id, historico)
       } else {
         const aviso = ehSemChave(e)
           ? e.message

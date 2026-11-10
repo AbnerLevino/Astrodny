@@ -8,6 +8,7 @@ import App from './App.tsx'
 import { ChatsProvider } from './ui/chats'
 import { StudiesProvider } from './ui/studies'
 import { SettingsProvider } from './ui/settings'
+import { GuiaChavesProvider } from './ui/guiaChaves'
 import { AuthProvider } from './ui/auth'
 
 createRoot(document.getElementById('root')!).render(
@@ -15,11 +16,13 @@ createRoot(document.getElementById('root')!).render(
     <BrowserRouter>
       <AuthProvider>
         <SettingsProvider>
-          <ChatsProvider>
-            <StudiesProvider>
-              <App />
-            </StudiesProvider>
-          </ChatsProvider>
+          <GuiaChavesProvider>
+            <ChatsProvider>
+              <StudiesProvider>
+                <App />
+              </StudiesProvider>
+            </ChatsProvider>
+          </GuiaChavesProvider>
         </SettingsProvider>
       </AuthProvider>
     </BrowserRouter>

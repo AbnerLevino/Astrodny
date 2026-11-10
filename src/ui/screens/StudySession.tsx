@@ -39,6 +39,8 @@ import { pdfExtractor, contarPaginasPdf } from '../../infrastructure/documents/p
 import { useStudies } from '../studies'
 import { useSettings } from '../settings'
 import BotaoChaves from '../components/BotaoChaves'
+import { useGuiaChaves } from '../guiaChaves'
+import { ehSemChave } from '../../application/ports/aiErrors'
 import { useAuth } from '../auth'
 import Sidebar from './Sidebar'
 import { AbasFluxo } from '../abas'
@@ -74,6 +76,8 @@ const iaProva = PROD ? proxyProvider : groqConfigurado ? retryProvider(groqProvi
 
 function StudySession() {
   const navigate = useNavigate()
+  const { groqApiKey } = useSettings()
+  const guia = useGuiaChaves()
   // tema que veio do botão "Montar estudo de X" no chat (Fase 2) — ver Home.tsx.
   // OU uma sessão salva pra RETOMAR (botão "Continuar" em Sessões de Estudos) — nesse
   // caso pulamos direto pra etapa 'aula', já com o Study e o bloco de onde parou.
@@ -151,6 +155,11 @@ function StudySession() {
             setContexto(ctx ?? '')
             setConfig(cfg ?? {})
             setErro(null)
+            // sem chave do Groq (BYOK): guia primeiro; ao concluir, monta o estudo sozinho
+            if (!groqApiKey.trim()) {
+              guia.abrir({ motivo: 'estudar', aoConcluir: () => setEtapa('analisando') })
+              return
+            }
             setEtapa('analisando')
           }}
         />
@@ -168,9 +177,14 @@ function StudySession() {
             setSessaoId(Date.now().toString(36))
             setEtapa('aula')
           }}
-          aoFalhar={(msg) => {
-            setErro(msg)
-            setEtapa('preparar') // volta pra tela de anexar, mostrando o erro
+          aoFalhar={(msg, erro) => {
+            setEtapa('preparar') // volta pra tela de anexar
+            if (ehSemChave(erro)) {
+              // chave ausente/recusada: guia em vez de erro; ao concluir, tenta montar de novo
+              guia.abrir({ motivo: 'estudar', aoConcluir: () => setEtapa('analisando') })
+              return
+            }
+            setErro(msg) // mostrando o erro
           }}
         />
       )}
@@ -246,7 +260,7 @@ function Analisando({
   contexto: string
   config: EstudoConfig
   aoConcluir: (estudo: Study) => void
-  aoFalhar: (mensagem: string) => void
+  aoFalhar: (mensagem: string, erro?: unknown) => void
 }) {
   const { personalidade } = useSettings()
   // status da etapa atual (reflete o trabalho REAL: ler → estruturar → prova)
@@ -334,7 +348,7 @@ function Analisando({
         if (controller.signal.aborted) return // cancelado de propósito, não é falha
         console.error('Falha ao montar o estudo:', e)
         if (vivo) {
-          aoFalhar(e instanceof Error ? e.message : 'Algo deu errado ao ler o material.')
+          aoFalhar(e instanceof Error ? e.message : 'Algo deu errado ao ler o material.', e)
         }
       }
     }

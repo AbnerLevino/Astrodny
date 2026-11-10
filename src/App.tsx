@@ -5,6 +5,7 @@ import StudySession from './ui/screens/StudySession'
 import SessoesEstudo from './ui/screens/SessoesEstudo'
 import Trabalho from './ui/screens/Trabalho'
 import Settings from './ui/screens/Settings'
+import GuiaChaves from './ui/components/GuiaChaves'
 
 /*
   Moldura de celular + rotas.
@@ -32,6 +33,8 @@ function App() {
           <Route path="/config" element={<Settings />} />
         </Routes>
       </div>
+      {/* guia de chaves (BYOK): modal global, abre por contexto (ui/guiaChaves.tsx) */}
+      <GuiaChaves />
     </div>
   )
 }
