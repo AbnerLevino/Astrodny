@@ -62,6 +62,21 @@ describe('geminiProvider', () => {
     expect(erro.message).not.toContain('AIza_segredo')
   })
 
+  it('400 com API_KEY_INVALID (chave malformada) também vira IAChaveInvalidaError', async () => {
+    const corpo = JSON.stringify({ error: { code: 400, status: 'INVALID_ARGUMENT', details: [{ reason: 'API_KEY_INVALID' }] } })
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(corpo, { status: 400 })))
+    const erro: Error = await geminiProvider('AIza_malformada').generate('oi').catch((e) => e)
+    expect(ehChaveInvalida(erro)).toBe(true)
+    expect(erro.message).not.toContain('AIza_malformada')
+  })
+
+  it('400 por outro motivo continua erro genérico (não culpa a chave)', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: { message: 'contents is required' } }), { status: 400 })))
+    const erro: Error = await geminiProvider('AIza_ok').generate('oi').catch((e) => e)
+    expect(ehChaveInvalida(erro)).toBe(false)
+    expect(erro.message).toBe('Gemini respondeu 400')
+  })
+
   it('manda a chave no header x-goog-api-key, nunca na URL', async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ candidates: [] }), { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)

@@ -113,6 +113,21 @@ function geminiCorpo(prompt: PromptInput, json?: boolean) {
   })
 }
 
+// O Gemini NÃO usa 401 pra chave inválida: chave malformada/inexistente volta como
+// 400 INVALID_ARGUMENT com reason "API_KEY_INVALID" no corpo; chave revogada/sem
+// permissão volta como 403. Por isso, além do status, olha o corpo do 400.
+// (Consome o corpo da resposta — só chamar quando já se sabe que vai lançar.)
+async function geminiRecusouChave(r: Response): Promise<boolean> {
+  if (ehStatusDeChaveInvalida(r.status)) return true
+  if (r.status !== 400) return false
+  try {
+    const texto = await r.text()
+    return texto.includes('API_KEY_INVALID') || texto.includes('API key not valid')
+  } catch {
+    return false
+  }
+}
+
 export function geminiProvider(chave: string): AIProvider {
   return {
     async generate(prompt, opcoes?: GenerateOptions) {
@@ -125,7 +140,7 @@ export function geminiProvider(chave: string): AIProvider {
       })
       if (!r.ok) {
         if (ehStatusDeLimite(r.status)) throw new IALimiteError(undefined, r.status, esperaSugeridaMs(r))
-        if (ehStatusDeChaveInvalida(r.status)) throw new IAChaveInvalidaError(MSG_GEMINI_RECUSADA)
+        if (await geminiRecusouChave(r)) throw new IAChaveInvalidaError(MSG_GEMINI_RECUSADA)
         throw new Error(`Gemini respondeu ${r.status}`)
       }
       const d = await r.json()
@@ -140,7 +155,7 @@ export function geminiProvider(chave: string): AIProvider {
       })
       if (!r.ok || !r.body) {
         if (ehStatusDeLimite(r.status)) throw new IALimiteError(undefined, r.status, esperaSugeridaMs(r))
-        if (ehStatusDeChaveInvalida(r.status)) throw new IAChaveInvalidaError(MSG_GEMINI_RECUSADA)
+        if (await geminiRecusouChave(r)) throw new IAChaveInvalidaError(MSG_GEMINI_RECUSADA)
         throw new Error(`Gemini respondeu ${r.status}`)
       }
       const decoder = new TextDecoder()
