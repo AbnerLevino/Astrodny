@@ -33,8 +33,12 @@ export function origemPermitida(origin: string | null): string | null {
 
 export function headersCors(request: Request): HeadersInit {
   const origin = origemPermitida(request.headers.get('origin'))
-  if (!origin) return {}
+  // no-store nos três: todo request aqui carrega a chave BYOK no corpo (generate/stream/
+  // validar-chave) — garante que nenhum cache (CDN, navegador) guarde a requisição ou a resposta.
+  const base: HeadersInit = { 'Cache-Control': 'no-store' }
+  if (!origin) return base
   return {
+    ...base,
     'Access-Control-Allow-Origin': origin,
     Vary: 'Origin',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',

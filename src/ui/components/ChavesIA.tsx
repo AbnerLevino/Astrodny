@@ -17,11 +17,20 @@ export type EstadoChave = 'vazia' | 'verificando' | 'valida' | 'invalida' | 'err
 
 export const INFO_PROVEDOR: Record<
   Provedor,
-  { titulo: string; subtitulo: string; descricao: string; link: string; linkRotulo: string; prefixo: string }
+  {
+    titulo: string
+    subtitulo: string
+    usoChip: string
+    descricao: string
+    link: string
+    linkRotulo: string
+    prefixo: string
+  }
 > = {
   groq: {
     titulo: 'Groq',
     subtitulo: 'Estudar e Trabalhos',
+    usoChip: 'Estudar · Trabalhos',
     descricao: 'O Astrodny usa o Groq pra gerar aulas, provas e trabalhos.',
     link: 'https://console.groq.com/keys',
     linkRotulo: 'console.groq.com/keys',
@@ -30,6 +39,7 @@ export const INFO_PROVEDOR: Record<
   gemini: {
     titulo: 'Gemini',
     subtitulo: 'Chat / tira-dúvidas',
+    usoChip: 'Chat',
     descricao: 'O Astrodny usa o Gemini pro chat/tira-dúvidas.',
     link: 'https://aistudio.google.com/apikey',
     linkRotulo: 'aistudio.google.com/apikey',
@@ -56,31 +66,39 @@ export function useChaveProvedor(provedor: Provedor) {
   const valida = chavesValidas[provedor]
   const { verificando, ultimo } = verificacao[provedor]
 
+  // formato claramente errado (Groq sempre começa com "gsk_") — nem vale bater na API:
+  // dá o feedback na hora, sem esperar a volta do servidor.
+  const formatoInvalido = provedor === 'groq' && valor !== '' && !valor.startsWith('gsk_')
+
   const estado: EstadoChave = !valor
     ? 'vazia'
-    : verificando
-      ? 'verificando'
-      : valida
-        ? 'valida'
-        : ultimo === 'invalida'
-          ? 'invalida'
-          : ultimo === 'erro'
-            ? 'erro'
-            : 'nao-verificada'
+    : formatoInvalido
+      ? 'invalida'
+      : verificando
+        ? 'verificando'
+        : valida
+          ? 'valida'
+          : ultimo === 'invalida'
+            ? 'invalida'
+            : ultimo === 'erro'
+              ? 'erro'
+              : 'nao-verificada'
 
   // chave salva antes de existir verificação (ou nunca conferida nesta sessão): confere ao montar
   useEffect(() => {
-    if (valor && !valida && ultimo === null) void verificarChave(provedor)
+    if (valor && !valida && ultimo === null && !formatoInvalido) void verificarChave(provedor)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   function aoSalvar(chave: string) {
     const limpa = chave.trim()
     definir(limpa)
-    if (limpa && (limpa !== valor || !valida)) void verificarChave(provedor, limpa)
+    if (!limpa) return
+    if (provedor === 'groq' && !limpa.startsWith('gsk_')) return // formato local já reprovou
+    if (limpa !== valor || !valida) void verificarChave(provedor, limpa)
   }
 
-  return { valor, estado, aoSalvar, tentarDeNovo: () => void verificarChave(provedor) }
+  return { valor, estado, formatoInvalido, aoSalvar, tentarDeNovo: () => void verificarChave(provedor) }
 }
 
 export function AcordeaoChaves({ inicial = null }: { inicial?: Provedor | null }) {
@@ -137,10 +155,6 @@ function OpcaoChave({ provedor, aberta, aoAlternar }: { provedor: Provedor; aber
             </p>
           )}
           <ChaveProvedor provedor={provedor} comRotulo />
-          <p className="pt-3 text-xs text-white/40">
-            Sua chave fica só no seu navegador. Ela é enviada pro nosso servidor apenas pra repassar sua
-            requisição — nunca é salva nem compartilhada.
-          </p>
         </div>
       )}
     </div>
@@ -165,7 +179,7 @@ export function SeloChave({ estado }: { estado: EstadoChave }) {
 // verificar) no meio de uma colagem.
 export function ChaveProvedor({ provedor, comRotulo = false }: { provedor: Provedor; comRotulo?: boolean }) {
   const info = INFO_PROVEDOR[provedor]
-  const { valor, estado, aoSalvar, tentarDeNovo } = useChaveProvedor(provedor)
+  const { valor, estado, formatoInvalido, aoSalvar, tentarDeNovo } = useChaveProvedor(provedor)
   const [rascunho, setRascunho] = useState(valor)
   const [mostrar, setMostrar] = useState(false)
 
@@ -173,8 +187,17 @@ export function ChaveProvedor({ provedor, comRotulo = false }: { provedor: Prove
     <div>
       {estado === 'invalida' && (
         <p className="pb-2.5 text-xs text-red-300">
-          O {info.titulo} recusou essa chave. Confira se copiou inteira, ou gere outra em{' '}
-          <LinkExterno href={info.link}>{info.linkRotulo}</LinkExterno>.
+          {formatoInvalido ? (
+            <>
+              Essa chave não foi aceita pelo {info.titulo}. Confira se copiou inteira, começando com{' '}
+              <code className="rounded bg-white/10 px-1">{info.prefixo.replace('...', '')}</code>.
+            </>
+          ) : (
+            <>
+              O {info.titulo} recusou essa chave. Confira se copiou inteira, ou gere outra em{' '}
+              <LinkExterno href={info.link}>{info.linkRotulo}</LinkExterno>.
+            </>
+          )}
         </p>
       )}
       {estado === 'erro' && (
@@ -186,8 +209,13 @@ export function ChaveProvedor({ provedor, comRotulo = false }: { provedor: Prove
         </p>
       )}
 
-      {comRotulo && <label className="mb-1.5 block text-sm text-white/70">Sua chave {info.titulo}</label>}
-      <div className="flex items-center gap-2">
+      {comRotulo && (
+        <div className="mb-1.5 flex items-center justify-between gap-3">
+          <label className="text-sm text-white/70">Sua chave {info.titulo}</label>
+          <SeloChave estado={estado} />
+        </div>
+      )}
+      <div className="relative">
         <input
           type={mostrar ? 'text' : 'password'}
           value={rascunho}
@@ -196,19 +224,44 @@ export function ChaveProvedor({ provedor, comRotulo = false }: { provedor: Prove
           placeholder={info.prefixo}
           autoComplete="off"
           aria-label={`Sua chave ${info.titulo}`}
-          className="w-full rounded-xl border border-white/15 bg-black/20 px-4 py-2.5 text-[15px] text-white outline-none placeholder:text-white/35 focus:border-white/40"
+          className="w-full rounded-xl border border-white/15 bg-black/20 px-4 py-2.5 pr-11 text-[15px] text-white outline-none placeholder:text-white/35 focus:border-white/40"
         />
         <button
           type="button"
           onClick={() => setMostrar((v) => !v)}
-          className="shrink-0 rounded-xl border border-white/15 px-3 py-2.5 text-xs text-white/70 hover:bg-white/5"
+          aria-label={mostrar ? 'Ocultar chave' : 'Mostrar chave'}
+          aria-pressed={mostrar}
+          className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-white/50 hover:text-white/80"
         >
-          {mostrar ? 'Ocultar' : 'Mostrar'}
+          <OlhoIcone aberto={mostrar} />
         </button>
       </div>
-      <div className="pt-2">
-        <SeloChave estado={estado} />
-      </div>
+      <p className="pt-2 text-xs text-white/40">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1 inline-block -translate-y-px" aria-hidden="true">
+          <rect x="5" y="11" width="14" height="10" rx="2" />
+          <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+        </svg>
+        Salva só neste aparelho
+      </p>
     </div>
+  )
+}
+
+function OlhoIcone({ aberto }: { aberto: boolean }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {aberto ? (
+        <>
+          <path d="M3 12s3.5-7 9-7 9 7 9 7-3.5 7-9 7-9-7-9-7Z" />
+          <circle cx="12" cy="12" r="3" />
+        </>
+      ) : (
+        <>
+          <path d="M3 3l18 18" />
+          <path d="M10.58 10.58a2 2 0 0 0 2.83 2.83" />
+          <path d="M9.88 5.09A9.4 9.4 0 0 1 12 5c5.5 0 9 7 9 7a13.9 13.9 0 0 1-2.1 2.9M6.1 6.1A14 14 0 0 0 3 12s3.5 7 9 7a9.3 9.3 0 0 0 3.1-.53" />
+        </>
+      )}
+    </svg>
   )
 }
